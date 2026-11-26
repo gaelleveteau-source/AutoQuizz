@@ -1,0 +1,3086 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoQuiz B2B - Pack Show TV & Métier</title>
+
+  <!-- SDK Firebase (App, Auth & Realtime Database) -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+  <style>
+    /* =========================================================
+       1. VARIABLES ET STYLES DE BASE
+       ========================================================= */
+    :root {
+      --bg-dark: #0e1117; --bg-card: #191c24; --bg-option: #1f232d;
+      --border-metallic: #363c4d; --carmin-red: #c21807; --carmin-hover: #e02310;
+      --accent-green: #22c55e; --gold-trophy: #fbbf24; --accent-amber: #f59e0b;
+      --accent-blue: #60a5fa; --text-main: #f1f3f7; --text-muted: #9aa2b4;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { background-color: var(--bg-dark); color: var(--text-main); min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
+
+    .btn { padding: 11px 18px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; color: white; font-size: 0.98rem; transition: 0.18s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; user-select: none; }
+    .btn-red { background: var(--carmin-red); } .btn-red:hover:not(:disabled) { background: var(--carmin-hover); }
+    .btn-green { background: var(--accent-green); color: #052e16; } .btn-green:hover:not(:disabled) { filter: brightness(1.08); }
+    .btn-gold { background: var(--gold-trophy); color: #111; } .btn-gold:hover:not(:disabled) { filter: brightness(1.08); }
+    .btn-dark { background: #252a36; border: 1px solid var(--border-metallic); color: var(--text-main); } .btn-dark:hover:not(:disabled) { background: #2f3545; }
+    .btn-google { background: #ffffff; color: #1f2937; border: 1px solid #d1d5db; width: 100%; font-size: 1.05rem; padding: 14px; }
+    .btn-google:hover { background: #f3f4f6; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    input, select, textarea { padding: 11px 12px; border-radius: 8px; border: 1px solid var(--border-metallic); background: #11141c; color: white; font-size: 0.98rem; outline: none; width: 100%; }
+    input:focus, select:focus, textarea:focus { border-color: var(--gold-trophy); }
+    input[type="range"] { padding: 0; background: transparent; border: none; accent-color: var(--gold-trophy); cursor: pointer; }
+
+    /* =========================================================
+       2. GESTION DES VUES
+       ========================================================= */
+    #view-login, #view-player, #view-gm-nav, #view-gm-pres, #view-gm-remote, #view-gm-edit, #view-gm-acc { display: none; }
+
+    body.mode-login #view-login { display: flex; }
+    body.mode-player #view-player { display: flex; }
+    body.mode-gm-pres #view-gm-nav, body.mode-gm-pres #view-gm-pres { display: flex; }
+    body.mode-gm-remote #view-gm-nav, body.mode-gm-remote #view-gm-remote { display: flex; }
+    body.mode-gm-edit #view-gm-nav, body.mode-gm-edit #view-gm-edit { display: flex; }
+    body.mode-gm-acc #view-gm-nav, body.mode-gm-acc #view-gm-acc { display: flex; }
+
+    /* =========================================================
+       3. CONNEXION
+       ========================================================= */
+    #view-login { flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; text-align: center; padding: 20px; }
+    .login-box { background: var(--bg-card); padding: 32px; border-radius: 16px; border: 1px solid var(--border-metallic); box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-width: 420px; width: 100%; }
+    .divider { display: flex; align-items: center; text-align: center; color: var(--text-muted); margin: 18px 0; font-size: 0.85rem; }
+    .divider::before, .divider::after { content: ''; flex: 1; border-bottom: 1px solid var(--border-metallic); }
+    .divider:not(:empty)::before { margin-right: .75em; }
+    .divider:not(:empty)::after { margin-left: .75em; }
+
+    /* =========================================================
+       4. VUE JOUEUR (MOBILE OPTIMISÉ)
+       ========================================================= */
+    #view-player { flex-direction: column; min-height: 100vh; padding: 16px; max-width: 760px; margin: 0 auto; width: 100%; }
+    .player-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border-metallic); gap: 10px; flex-wrap: wrap; }
+    .global-stats { background: #11141a; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border-metallic); font-size: 0.88rem; display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+
+    .vote-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media(max-width: 600px) { .vote-grid { grid-template-columns: 1fr; } }
+
+    .btn-vote { background: var(--bg-option); border: 3px solid var(--border-metallic); border-radius: 12px; font-size: 1.1rem; font-weight: bold; color: white; cursor: pointer; transition: 0.15s; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; text-align: center; gap: 8px; min-height: 82px; position: relative; }
+    .btn-vote:hover:not(:disabled) { border-color: var(--gold-trophy); background: #262c3a; }
+    .vote-selected { border-color: var(--gold-trophy) !important; background: rgba(251,191,36,0.2) !important; box-shadow: 0 0 15px rgba(251,191,36,0.25); }
+    .revealed-correct { border-color: var(--accent-green) !important; background: rgba(34,197,94,0.25) !important; }
+    .revealed-wrong { opacity: 0.32; filter: grayscale(0.9); }
+    .elim-5050 { opacity: 0.18 !important; pointer-events: none !important; text-decoration: line-through; }
+
+    .joker-bar { display: flex; gap: 8px; justify-content: center; margin-bottom: 12px; flex-wrap: wrap; }
+    .bet-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+    .bet-btn { padding: 8px 6px; border-radius: 8px; border: 2px solid var(--border-metallic); background: #151922; color: var(--text-main); cursor: pointer; font-size: 0.82rem; font-weight: bold; text-align: center; }
+    .bet-btn.active { border-color: var(--gold-trophy); background: rgba(251,191,36,0.18); color: var(--gold-trophy); }
+
+    .emoji-dock { display: flex; justify-content: center; gap: 10px; margin-top: 16px; padding-top: 12px; border-top: 1px dashed #262b38; }
+    .emoji-btn { background: #1b202b; border: 1px solid var(--border-metallic); border-radius: 50%; width: 44px; height: 44px; font-size: 1.35rem; cursor: pointer; transition: transform 0.12s; }
+    .emoji-btn:active { transform: scale(1.25); }
+
+    /* =========================================================
+       5. NAVIGATION GM, PLATEAU TV & TÉLÉCOMMANDE
+       ========================================================= */
+    .gm-nav { background: #151821; padding: 12px 24px; border-bottom: 1px solid var(--border-metallic); justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; width: 100%; flex-wrap: wrap; gap: 10px; }
+    .gm-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+    .tab-btn { background: transparent; color: var(--text-muted); border: 1px solid transparent; font-size: 0.98rem; font-weight: bold; padding: 8px 15px; cursor: pointer; border-radius: 8px; transition: 0.2s; }
+
+    body.mode-gm-pres #tab-pres { color: var(--gold-trophy); background: rgba(251,191,36,0.1); border-color: var(--gold-trophy); }
+    body.mode-gm-remote #tab-remote { color: #c084fc; background: rgba(192,132,252,0.12); border-color: #c084fc; }
+    body.mode-gm-edit #tab-edit { color: var(--accent-green); background: rgba(34,197,94,0.1); border-color: var(--accent-green); }
+    body.mode-gm-acc #tab-acc { color: var(--accent-blue); background: rgba(96, 165, 250, 0.1); border-color: var(--accent-blue); }
+
+    .gm-layout { gap: 20px; padding: 20px; max-width: 1440px; margin: 0 auto; width: 100%; align-items: flex-start; }
+    .gm-main { flex: 1; background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-metallic); padding: 26px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); width: 100%; position: relative; }
+    .gm-sidebar { width: 340px; background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-metallic); padding: 18px; display: flex; flex-direction: column; max-height: calc(100vh - 100px); overflow-y: auto; }
+    @media(max-width: 960px) { .gm-layout { flex-direction: column; } .gm-sidebar { width: 100%; max-height: 360px; } }
+
+    .session-config-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; background: #11141c; padding: 14px; border-radius: 10px; border: 1px solid var(--border-metallic); margin-bottom: 22px; align-items: end; }
+    .session-config-bar label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: bold; display: block; margin-bottom: 4px; }
+
+    /* CHRONOMÈTRE & DOUBLE POINTS */
+    .timer-wrap { width: 100%; height: 12px; background: #11141c; border-radius: 99px; overflow: hidden; margin-bottom: 16px; border: 1px solid #2b3140; }
+    .timer-bar { height: 100%; width: 100%; background: linear-gradient(90deg, var(--accent-green), var(--gold-trophy), var(--carmin-red)); transition: width 0.2s linear; }
+    .double-banner { background: linear-gradient(90deg, #92400e, #f59e0b, #92400e); color: #000; font-weight: 900; text-align: center; padding: 6px 14px; border-radius: 99px; display: inline-block; font-size: 0.9rem; letter-spacing: 1px; margin-bottom: 10px; animation: pulseGold 1.4s infinite; }
+    @keyframes pulseGold { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+
+    /* BARRES DE POURCENTAGE TV */
+    .tv-opt-card { background: var(--bg-option); border: 3px solid var(--border-metallic); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; font-size: 1.3rem; font-weight: bold; position: relative; overflow: hidden; transition: 0.25s; }
+    .tv-opt-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: rgba(251, 191, 36, 0.14); z-index: 0; transition: width 0.5s ease-out; }
+    .tv-opt-card.revealed-correct .tv-opt-fill { background: rgba(34, 197, 94, 0.28); }
+    .tv-opt-content { position: relative; z-index: 1; display: flex; align-items: center; gap: 14px; width: 100%; }
+
+    /* HOTSPOT IMAGE CONTAINER */
+    .hotspot-stage { position: relative; display: inline-block; max-width: 100%; margin: 0 auto; border-radius: 12px; overflow: hidden; border: 2px solid var(--border-metallic); user-select: none; }
+    .hotspot-stage img { display: block; max-width: 100%; max-height: 360px; object-fit: contain; }
+    .hotspot-target-rect { position: absolute; border: 3px solid var(--accent-green); background: rgba(34, 197, 94, 0.25); box-shadow: 0 0 20px rgba(34,197,94,0.6); pointer-events: none; border-radius: 6px; }
+    .hotspot-pin { position: absolute; width: 18px; height: 18px; border-radius: 50%; transform: translate(-50%, -50%); border: 2px solid #fff; pointer-events: none; box-shadow: 0 2px 8px rgba(0,0,0,0.8); }
+
+    /* MODE TV PLEIN ÉCRAN (Compatible Google Sites sans coupure verticale) */
+    body.is-tv-mode { background-color: #05070a; padding: 0 !important; overflow-y: auto; overflow-x: hidden; }
+    body.is-tv-mode .gm-nav, body.is-tv-mode .gm-sidebar, body.is-tv-mode .gm-controls-header, body.is-tv-mode .session-config-bar, body.is-tv-mode .btn-tv-hide { display: none !important; }
+    body.is-tv-mode .gm-layout { max-width: 100%; padding: 0; }
+    body.is-tv-mode .gm-main { border: none !important; box-shadow: none !important; padding: 36px 50px !important; background: transparent !important; max-width: 1600px; margin: 0 auto; display: flex; flex-direction: column; justify-content: center; min-height: 100vh; }
+    body.is-tv-mode .question-text { font-size: 2.3rem !important; margin-bottom: 32px !important; }
+    body.is-tv-mode .vote-counter-live { display: none !important; }
+
+    #tv-top-bar { position: fixed; top: 16px; right: 16px; z-index: 9999; display: none; gap: 8px; }
+    body.is-tv-mode #tv-top-bar { display: flex; }
+
+    #tv-remote { display: none; position: fixed; bottom: 18px; right: 18px; background: rgba(14, 17, 23, 0.94); padding: 14px; border-radius: 12px; border: 1px solid var(--border-metallic); gap: 8px; z-index: 10000; opacity: 0.14; transition: opacity 0.25s; flex-direction: column; }
+    body.is-tv-mode #tv-remote { display: flex; }
+    body.is-tv-mode #tv-remote:hover { opacity: 1; }
+
+    /* ÉMOJIS FLOTTANTS SUR ÉCRAN TV */
+    #floating-reactions-layer { position: fixed; inset: 0; pointer-events: none; z-index: 9500; overflow: hidden; }
+    .floating-emoji { position: absolute; bottom: -40px; font-size: 2.6rem; animation: floatUpEmoji 3.2s ease-out forwards; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5)); }
+    @keyframes floatUpEmoji {
+      0% { transform: translateY(0) scale(0.7) rotate(-8deg); opacity: 0; }
+      15% { opacity: 1; transform: translateY(-60px) scale(1.1) rotate(6deg); }
+      100% { transform: translateY(-75vh) scale(0.9) rotate(-10deg); opacity: 0; }
+    }
+
+    /* =========================================================
+       6. PODIUMS, COMPTES & ÉDITEUR (GRILLE 2 COLONNES CORRIGÉE)
+       ========================================================= */
+    .table-container { overflow-x: auto; background: #11141a; border-radius: 12px; border: 1px solid var(--border-metallic); }
+    .acc-table { width: 100%; border-collapse: collapse; }
+    .acc-table th, .acc-table td { padding: 13px 15px; border-bottom: 1px solid var(--border-metallic); text-align: left; }
+    .acc-table th { color: var(--accent-blue); font-weight: bold; background: #151821; text-transform: uppercase; font-size: 0.85rem; }
+    .acc-table tr:last-child td { border-bottom: none; }
+    .badge-google { background: rgba(96, 165, 250, 0.15); color: #60a5fa; border: 1px solid #60a5fa; padding: 3px 8px; border-radius: 6px; font-size: 0.78rem; font-weight: bold; }
+
+    .lb-item { display: flex; justify-content: space-between; align-items: center; padding: 14px 22px; background: var(--bg-option); border: 1px solid var(--border-metallic); border-radius: 12px; margin-bottom: 10px; font-weight: bold; font-size: 1.15rem; gap: 10px; flex-wrap: wrap; }
+    .rank-1 { border-color: var(--gold-trophy); background: rgba(251,191,36,0.12); color: var(--gold-trophy); font-size: 1.45rem; padding: 20px 24px; }
+    .rank-2 { border-color: #cbd5e1; font-size: 1.25rem; padding: 16px 22px; }
+    .rank-3 { border-color: #b45309; }
+
+    @keyframes popRank { 0% { transform: scale(0.85) translateY(25px); opacity: 0; } 100% { transform: scale(1) translateY(0); opacity: 1; } }
+    @keyframes popRank1 { 0% { transform: scale(0.6) translateY(40px); opacity: 0; } 100% { transform: scale(1) translateY(0); opacity: 1; } }
+    @keyframes goldGlow { 0%, 100% { box-shadow: 0 0 15px rgba(251,191,36,0.3); } 50% { box-shadow: 0 0 38px rgba(251,191,36,0.75); } }
+
+    .podium-ceremony .rank-3 { animation: popRank 0.55s ease-out 0.3s backwards; }
+    .podium-ceremony .rank-2 { animation: popRank 0.55s ease-out 1.0s backwards; }
+    .podium-ceremony .rank-1 { animation: popRank1 0.75s ease-out 1.8s backwards, goldGlow 2.2s infinite 2.6s; }
+    .podium-ceremony .rank-other { animation: popRank 0.5s ease-out 2.3s backwards; opacity: 0.88; }
+
+    .editor-section { background: #11141a; padding: 20px; border-radius: 12px; border: 1px solid var(--border-metallic); margin-bottom: 20px; }
+    .editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .editor-grid .full { grid-column: 1 / -1; }
+    @media(max-width: 700px) { .editor-grid { grid-template-columns: 1fr; } }
+
+    .editor-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+    .editor-field label { color: var(--text-muted); font-size: 0.8rem; font-weight: bold; text-transform: uppercase; }
+    .img-upload-box { border: 1px dashed var(--border-metallic); padding: 10px; border-radius: 8px; text-align: center; background: #0b0d12; position: relative; }
+    .img-preview { max-height: 110px; max-width: 100%; border-radius: 6px; margin-top: 8px; object-fit: contain; }
+    .btn-remove-img { position: absolute; top: 5px; right: 5px; background: var(--carmin-red); border: none; color: white; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-weight: bold; }
+
+    /* MODALES & TOASTS */
+    .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.82); z-index: 20000; align-items: center; justify-content: center; padding: 16px; overflow-y: auto; }
+    .modal-backdrop.open { display: flex; }
+    .modal-box { background: var(--bg-card); border: 1px solid var(--border-metallic); border-radius: 16px; padding: 24px; max-width: 540px; width: 100%; box-shadow: 0 20px 50px rgba(0,0,0,0.65); max-height: 90vh; overflow-y: auto; }
+    .modal-title { font-size: 1.25rem; font-weight: bold; color: var(--gold-trophy); margin-bottom: 12px; }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; flex-wrap: wrap; }
+
+    #toast-msg { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1f2937; color: #fff; border: 1px solid var(--gold-trophy); padding: 11px 22px; border-radius: 10px; font-weight: bold; z-index: 30000; display: none; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align: center; max-width: 92vw; }
+  </style>
+</head>
+<body class="mode-login">
+
+  <div id="toast-msg"></div>
+  <div id="floating-reactions-layer"></div>
+
+  <!-- MODALE UNIVERSELLE (100% compatible Google Sites, zéro alert/prompt/confirm) -->
+  <div id="custom-modal" class="modal-backdrop">
+    <div class="modal-box">
+      <div id="modal-title" class="modal-title">Titre</div>
+      <div id="modal-body" style="color: var(--text-main); line-height: 1.5;"></div>
+      <div id="modal-actions" class="modal-actions"></div>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 1 : CONNEXION -->
+  <div id="view-login">
+    <h1 style="color:var(--gold-trophy); font-size: 3.2rem; margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 2px;">AutoQuiz B2B</h1>
+    <p style="color:var(--text-muted); font-size: 1.05rem; margin-bottom: 26px;">Show TV Interactif, Expertise VO & Challenge Équipes</p>
+
+    <div class="login-box">
+      <h2 style="margin-bottom: 18px; font-size:1.35rem;">Connexion Joueur</h2>
+
+      <button class="btn btn-google" onclick="loginWithGoogle()">
+        <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        Continuer avec Google
+      </button>
+
+      <div class="divider">ou connexion rapide par pseudo</div>
+
+      <input type="text" id="login-pseudo" placeholder="Votre Pseudo (2 à 20 caractères)" maxlength="20" style="text-align:center; font-size:1.05rem; margin-bottom:10px; padding:13px;" onkeydown="if(event.key==='Enter') document.getElementById('login-pwd').focus()">
+      <input type="password" id="login-pwd" placeholder="Mot de passe" style="text-align:center; font-size:1.05rem; margin-bottom:16px; padding:13px;" onkeydown="if(event.key==='Enter') loginAsPlayer()">
+      <button class="btn btn-green" style="width:100%; font-size:1.08rem; padding:14px;" onclick="loginAsPlayer()">Rejoindre / Créer un compte</button>
+      <div id="login-error" style="color:#f87171; margin-top:14px; display:none; font-weight:bold; font-size:0.9rem; line-height:1.4;"></div>
+    </div>
+
+    <button class="btn btn-dark" style="margin-top: 28px; opacity:0.85;" onclick="openGMLoginModal()">👑 Accès Maître du Jeu</button>
+  </div>
+
+  <!-- ÉCRAN 2 : VUE JOUEUR -->
+  <div id="view-player">
+    <div class="player-header">
+      <div>
+        <span style="color:var(--text-muted); font-size:0.82rem;">Joueur connecté :</span><br>
+        <strong id="player-ui-name" style="font-size:1.15rem; color:var(--gold-trophy);">...</strong>
+        <span id="player-ui-streak" style="margin-left:6px; font-size:0.95rem;"></span>
+      </div>
+      <div id="player-team-picker-wrap" style="display:none;">
+        <select id="player-team-select" onchange="playerSelectTeam(this.value)" style="padding:6px 10px; font-size:0.88rem; font-weight:bold;"></select>
+      </div>
+      <div style="text-align:right;">
+        <span style="color:var(--text-muted); font-size:0.82rem;">Score partie :</span><br>
+        <strong id="player-ui-score" style="font-size:1.2rem;">0 pts</strong>
+      </div>
+    </div>
+
+    <div class="global-stats">
+      <span>🏆 <strong>Carrière :</strong> <span id="player-ui-global-score">0</span> pts</span>
+      <span id="player-mode-badge" style="color:var(--accent-blue); font-size:0.82rem;">Mode Standard</span>
+    </div>
+
+    <div id="player-timer-wrap" class="timer-wrap" style="display:none;"><div id="player-timer-bar" class="timer-bar"></div></div>
+
+    <div id="player-dynamic-content" style="flex:1; display:flex; flex-direction:column; justify-content:center;"></div>
+
+    <div class="emoji-dock">
+      <button class="emoji-btn" title="En feu" onclick="sendReaction('🔥')">🔥</button>
+      <button class="emoji-btn" title="Bravo" onclick="sendReaction('👏')">👏</button>
+      <button class="emoji-btn" title="Surpris" onclick="sendReaction('😱')">😱</button>
+      <button class="emoji-btn" title="Auto" onclick="sendReaction('🚗')">🚗</button>
+      <button class="emoji-btn" title="Bien vu" onclick="sendReaction('💡')">💡</button>
+    </div>
+
+    <div style="text-align:center; margin-top:14px;">
+      <button class="btn btn-dark" style="font-size:0.8rem; padding:7px 14px;" onclick="leaveGame()">Déconnexion</button>
+    </div>
+  </div>
+
+  <!-- BARRE FLOTTANTE MODE TV -->
+  <div id="tv-top-bar">
+    <button class="btn btn-dark" onclick="toggleSound()" id="btn-tv-sound">🔊 Son ON</button>
+    <button class="btn btn-dark" onclick="toggleTVMode()">✕ Quitter Mode TV (Échap)</button>
+  </div>
+
+  <!-- NAVIGATION MAÎTRE DU JEU -->
+  <div id="view-gm-nav" class="gm-nav">
+    <div style="font-size:1.35rem; font-weight:900; color:var(--gold-trophy); display:flex; align-items:center; gap:10px;">
+      <span>👑 GM STUDIO</span>
+      <button class="btn btn-dark" style="padding:6px 12px; font-size:0.82rem;" id="btn-nav-sound" onclick="toggleSound()">🔊 Son ON</button>
+    </div>
+    <div class="gm-tabs">
+      <button id="tab-pres" class="tab-btn" onclick="switchGMTab('pres')">🎮 Plateau TV</button>
+      <button id="tab-remote" class="tab-btn" onclick="switchGMTab('remote')">📱 Télécommande</button>
+      <button id="tab-edit" class="tab-btn" onclick="switchGMTab('edit')">🛠️ Éditeur Quiz</button>
+      <button id="tab-acc" class="tab-btn" onclick="switchGMTab('acc')">👥 Comptes & Bilans</button>
+    </div>
+    <button class="btn btn-red" style="padding:8px 14px; font-size:0.9rem;" onclick="leaveGame()">Déconnexion</button>
+  </div>
+
+  <!-- MODE A : PLATEAU TV (ANIMATEUR) -->
+  <div id="view-gm-pres" class="gm-layout">
+    <div class="gm-main">
+      <div class="gm-controls-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; gap:10px; flex-wrap:wrap;">
+        <div style="display:flex; gap:8px; flex:1; min-width:260px; flex-wrap:wrap;">
+          <select id="gm-pres-selector" style="flex:1; min-width:200px; font-weight:bold;"></select>
+          <button class="btn btn-green" onclick="launchQuiz()">🚀 Lancer la partie</button>
+          <button class="btn btn-dark" style="border-color:var(--gold-trophy); color:var(--gold-trophy);" onclick="toggleTVMode()">📺 Mode TV</button>
+          <button class="btn btn-dark" onclick="openQRSettingsModal()">🔗 Lien & QR</button>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-dark" onclick="db.ref('state/status').set('lobby')" title="Retour au Lobby QR">🏠 Lobby</button>
+          <button class="btn btn-dark" style="color:#f87171;" onclick="confirmResetRoom()">🗑️ Vider salon</button>
+        </div>
+      </div>
+
+      <!-- BARRE DE CONFIGURATION DE LA SESSION -->
+      <div class="session-config-bar">
+        <div>
+          <label>Mode de Points</label>
+          <select id="cfg-scoring" onchange="saveSessionConfigDraft()">
+            <option value="speed">⚡ Show TV (Vitesse 500-1000)</option>
+            <option value="precision">🎯 Précision (100 pts fixe)</option>
+            <option value="bet">🎲 Pari de Confiance</option>
+          </select>
+        </div>
+        <div>
+          <label>Chronomètre / Question</label>
+          <select id="cfg-timer" onchange="saveSessionConfigDraft()">
+            <option value="20">⏱️ 20 secondes</option>
+            <option value="15">⏱️ 15 secondes</option>
+            <option value="30">⏱️ 30 secondes</option>
+            <option value="45">⏱️ 45 secondes</option>
+            <option value="0">♾️ Sans limite</option>
+          </select>
+        </div>
+        <div>
+          <label>Organisation</label>
+          <div style="display:flex; gap:6px;">
+            <select id="cfg-teams" onchange="saveSessionConfigDraft()">
+              <option value="solo">👤 Individuel</option>
+              <option value="teams">🛡️ Par Équipes</option>
+            </select>
+            <button class="btn btn-dark" style="padding:10px;" title="Renommer les équipes" onclick="openTeamsConfigModal()">⚙️</button>
+          </div>
+        </div>
+        <div>
+          <label>Jokers Joueurs (50/50 & x2)</label>
+          <select id="cfg-jokers" onchange="saveSessionConfigDraft()">
+            <option value="1">🃏 Activés (1 par partie)</option>
+            <option value="0">🚫 Désactivés</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="gm-timer-wrap" class="timer-wrap" style="display:none;"><div id="gm-timer-bar" class="timer-bar"></div></div>
+
+      <div id="gm-pres-dynamic-content"></div>
+    </div>
+
+    <div class="gm-sidebar">
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-metallic); padding-bottom:10px; margin-bottom:12px;">
+        <h3 style="color:var(--gold-trophy); font-size:1.05rem;">👥 Joueurs (<span id="gm-pres-count">0</span>)</h3>
+        <button class="btn btn-dark" style="padding:4px 8px; font-size:0.75rem;" onclick="pruneOfflinePlayers()" title="Retirer les joueurs hors-ligne">🧹 Hors-ligne</button>
+      </div>
+      <div id="gm-pres-players" style="flex:1;"></div>
+    </div>
+
+    <!-- MINI TÉLÉCOMMANDE SURVOL MODE TV -->
+    <div id="tv-remote">
+      <p style="color:var(--gold-trophy); font-size:0.78rem; text-align:center;">Télécommande Clavier / Souris</p>
+      <button class="btn btn-dark" onclick="toggleClue()">🔍 Indice (Touche I)</button>
+      <button class="btn btn-gold" onclick="toggleDoublePoints()">⚡ Manche x2 (Touche D)</button>
+      <button class="btn btn-red" onclick="revealAnswer()">🏁 Révéler (Espace)</button>
+      <button class="btn btn-dark" onclick="toggleMidLeaderboard()">🏆 Top 5 Mi-Temps (Touche M)</button>
+      <button class="btn btn-green" onclick="nextQuestion()">➡️ Suivante (Espace)</button>
+    </div>
+  </div>
+
+  <!-- MODE A-BIS : TÉLÉCOMMANDE MOBILE ANIMATEUR -->
+  <div id="view-gm-remote" class="gm-layout">
+    <div class="gm-main" style="max-width:560px; margin:0 auto; padding:20px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <span style="color:#c084fc; font-weight:bold;">📱 Télécommande Animateur</span>
+        <span id="remote-vote-progress" style="background:#11141c; padding:5px 12px; border-radius:99px; border:1px solid var(--border-metallic); font-size:0.9rem;">0 / 0 votes</span>
+      </div>
+      <div id="gm-remote-content"></div>
+    </div>
+  </div>
+
+  <!-- MODE B : ÉDITEUR DE QUIZ SYNCHRONISÉ CLOUD -->
+  <div id="view-gm-edit" class="gm-layout">
+    <div class="gm-main" style="max-width:980px; margin:0 auto;">
+      <div class="editor-section" style="border-color:var(--gold-trophy);">
+        <h3 style="color:var(--gold-trophy); margin-bottom:10px;">🤖 Générateur & Import IA Multi-Formats</h3>
+        <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom:12px;">Générez un quiz complet (QCM, Vrai/Faux, Multi-réponses, Juste Prix VO) via ChatGPT ou Gemini et collez le JSON ci-dessous.</p>
+        <button class="btn btn-dark" style="margin-bottom:12px; width:100%;" onclick="copyIAPrompt()">📄 1. Copier la consigne IA prête à l'emploi</button>
+        <textarea id="import-ia-text" rows="3" placeholder='Collez ici le bloc JSON généré par l’IA...' style="font-family:monospace; margin-bottom:10px;"></textarea>
+        <button class="btn btn-green" style="width:100%;" onclick="applyIAImport()">📥 2. Importer et enregistrer dans le Cloud Firebase</button>
+      </div>
+
+      <div class="editor-section">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; flex-wrap:wrap; gap:10px;">
+          <h3 style="color:white;">🛠️ Bibliothèque de Quiz (Synchronisée Firebase)</h3>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <select id="gm-edit-selector" style="width:260px;" onchange="loadEditionIntoEditor(this.value)"></select>
+            <button class="btn btn-dark" onclick="createNewEdition()">＋ Nouveau</button>
+            <button class="btn btn-dark" style="color:#f87171;" onclick="confirmDeleteEdition()">🗑️</button>
+          </div>
+        </div>
+        <div class="editor-field" style="margin-bottom: 22px;">
+          <label>Titre du Quiz :</label>
+          <input type="text" id="editor-title" placeholder="Ex: Challenge Expertise & Cote VO" oninput="editorModel.label = this.value">
+        </div>
+        <div id="editor-questions-container"></div>
+        <div style="display:flex; justify-content:space-between; margin-top:20px; padding-top:18px; border-top:1px solid var(--border-metallic); flex-wrap:wrap; gap:10px;">
+          <button class="btn btn-dark" onclick="addQuestionToEditor()">＋ Ajouter une question</button>
+          <button class="btn btn-red" onclick="saveEditor()">💾 Sauvegarder dans Firebase</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODE C : COMPTES, PALMARÈS & EXPORT BILAN -->
+  <div id="view-gm-acc" class="gm-layout">
+    <div class="gm-main" style="max-width:1040px; margin:0 auto;">
+      <div class="editor-section" style="border-color:var(--gold-trophy);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+          <h3 style="color:var(--gold-trophy);">🏆 Podiums, Palmarès & Export Formation</h3>
+          <button class="btn btn-green" onclick="openStatsExportModal()">📊 Exporter le Bilan (CSV / Excel)</button>
+        </div>
+        <select id="gm-leaderboard-selector" onchange="renderGMLeaderboard()" style="margin-bottom:18px; font-weight:bold;"></select>
+        <div id="gm-leaderboard-container"></div>
+      </div>
+
+      <div class="editor-section">
+        <h3 style="color:var(--accent-blue); margin-bottom:8px;">👥 Gestion des Comptes Joueurs (Google & Locaux)</h3>
+        <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom:14px;">Les mots de passe locaux sont chiffrés (SHA-256). Vous pouvez renommer un joueur, réinitialiser son mot de passe ou ajuster son score global.</p>
+        <div class="table-container">
+          <table class="acc-table">
+            <thead>
+              <tr><th>Pseudo</th><th>Authentification</th><th>Score Carrière</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="accounts-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. CONFIGURATION FIREBASE & SYNCHRONISATION HORLOGE SERVEUR
+    // =========================================================================
+    const firebaseConfig = {
+      apiKey: "AIzaSyBuX-Xvd_QwThgrPhRlDQ33-cphB8VouwE",
+      authDomain: "autoquizz-98bd0.firebaseapp.com",
+      databaseURL: "https://autoquizz-98bd0-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "autoquizz-98bd0",
+      storageBucket: "autoquizz-98bd0.firebasestorage.app",
+      messagingSenderId: "767239159423",
+      appId: "1:767239159423:web:caf56e735e6e5d4245894a"
+    };
+
+    let db, auth;
+    let serverTimeOffset = 0;
+    try {
+      firebase.initializeApp(firebaseConfig);
+      db = firebase.database();
+      auth = firebase.auth();
+      db.ref('.info/serverTimeOffset').on('value', snap => {
+        serverTimeOffset = snap.val() || 0;
+      });
+    } catch (e) {
+      console.error("Erreur d'initialisation Firebase:", e);
+    }
+
+    function nowServer() { return Date.now() + serverTimeOffset; }
+    function cleanFirebaseObj(obj) { return JSON.parse(JSON.stringify(obj)); }
+
+    // =========================================================================
+    // 2. SÉCURITÉ SHA-256 & NORMALISATION DES PSEUDOS
+    // =========================================================================
+    async function sha256Hex(text) {
+      const str = String(text || '');
+      if (window.crypto && window.crypto.subtle) {
+        try {
+          const buf = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+          return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+        } catch (e) {}
+      }
+      // Secours déterministe si contexte non-HTTPS local
+      let h1 = 0xdeadbeef ^ str.length, h2 = 0x41c6ce57 ^ str.length;
+      for (let i = 0, ch; i < str.length; i++) {
+        ch = str.charCodeAt(i);
+        h1 = Math.imul(h1 ^ ch, 2654435761);
+        h2 = Math.imul(h2 ^ ch, 1597334677);
+      }
+      h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+      h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+      return (h2 >>> 0).toString(16).padStart(8, '0') + (h1 >>> 0).toString(16).padStart(8, '0');
+    }
+
+    // Hash SHA-256 par défaut pour "admin"
+    const DEFAULT_GM_HASH = "8e68bf0d3bd2082551c0c6396e556a239dd7489a4f0fdd21fcae42e1bf645d1f";
+
+    function pseudoToAccountKey(pseudo) {
+      const slug = String(pseudo || '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase().replace(/[^a-z0-9]/g, '');
+      return slug.length >= 2 ? 'acc_' + slug : null;
+    }
+
+    // =========================================================================
+    // 3. SYNTHÉTISEUR AUDIO WEB (Zéro MP3 externe, compatible Google Sites)
+    // =========================================================================
+    let soundEnabled = true;
+    let audioCtx = null;
+
+    function getAudioCtx() {
+      if (!soundEnabled) return null;
+      try {
+        if (!audioCtx) {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (AC) audioCtx = new AC();
+        }
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+        return audioCtx;
+      } catch (e) { return null; }
+    }
+
+    function playSound(type) {
+      const ctx = getAudioCtx();
+      if (!ctx) return;
+      try {
+        const now = ctx.currentTime;
+        const playTone = (freq, start, dur, wave = 'sine', gainVal = 0.12) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = wave;
+          osc.frequency.setValueAtTime(freq, start);
+          gain.gain.setValueAtTime(gainVal, start);
+          gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(start);
+          osc.stop(start + dur);
+        };
+        if (type === 'tick') playTone(880, now, 0.07, 'triangle', 0.07);
+        else if (type === 'gong') { playTone(220, now, 0.45, 'sawtooth', 0.14); playTone(165, now + 0.08, 0.5, 'sawtooth', 0.14); }
+        else if (type === 'reveal') { playTone(523.25, now, 0.18, 'triangle', 0.14); playTone(659.25, now + 0.1, 0.22, 'triangle', 0.14); playTone(783.99, now + 0.2, 0.38, 'triangle', 0.16); }
+        else if (type === 'podium') {
+          [523.25, 659.25, 783.99, 1046.5].forEach((f, idx) => playTone(f, now + idx * 0.14, 0.35, 'triangle', 0.16));
+        }
+      } catch (e) {}
+    }
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      const label = soundEnabled ? '🔊 Son ON' : '🔇 Muet';
+      const b1 = document.getElementById('btn-nav-sound'); if (b1) b1.innerText = label;
+      const b2 = document.getElementById('btn-tv-sound'); if (b2) b2.innerText = label;
+      if (soundEnabled) playSound('tick');
+    }
+
+    // =========================================================================
+    // 4. ANTI-VEILLE MOBILE (WAKE LOCK SÉCURISÉ IFRAME)
+    // =========================================================================
+    let wakeLockSentinel = null;
+    async function requestMobileWakeLock() {
+      try {
+        if ('wakeLock' in navigator && !wakeLockSentinel) {
+          wakeLockSentinel = await navigator.wakeLock.request('screen');
+          wakeLockSentinel.addEventListener('release', () => { wakeLockSentinel = null; });
+        }
+      } catch (e) { /* Ignoré silencieusement si iframe sans permission wake-lock */ }
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && myRole === 'joueur') requestMobileWakeLock();
+    });
+
+    // =========================================================================
+    // 5. GESTIONNAIRE DE SESSION MULTI-SUPPORTS
+    // =========================================================================
+    const SESSION_KEY = 'autoquiz_session_v3';
+
+    function saveSession(sessionObj) {
+      const raw = JSON.stringify(sessionObj);
+      try { localStorage.setItem(SESSION_KEY, raw); } catch(e){}
+      try { sessionStorage.setItem(SESSION_KEY, raw); } catch(e){}
+      try {
+        if (location.protocol === 'https:') {
+          document.cookie = SESSION_KEY + "=" + encodeURIComponent(raw) + "; max-age=604800; path=/; SameSite=None; Secure; Partitioned";
+        } else {
+          document.cookie = SESSION_KEY + "=" + encodeURIComponent(raw) + "; max-age=604800; path=/; SameSite=Lax";
+        }
+      } catch(e){}
+      try { window.name = "AUTOQUIZ_SESSION:" + raw; } catch(e){}
+    }
+
+    function parseSessionRaw(raw) {
+      if (!raw) return null;
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && (parsed.role === 'joueur' || parsed.role === 'maitre')) return parsed;
+      } catch(e){}
+      return null;
+    }
+
+    function loadSession() {
+      let data = null;
+      try { data = parseSessionRaw(localStorage.getItem(SESSION_KEY)); } catch(e){}
+      if (data) return data;
+      try { data = parseSessionRaw(sessionStorage.getItem(SESSION_KEY)); } catch(e){}
+      if (data) return data;
+      try {
+        const match = document.cookie.split('; ').find(r => r.startsWith(SESSION_KEY + '='));
+        if (match) data = parseSessionRaw(decodeURIComponent(match.substring(SESSION_KEY.length + 1)));
+      } catch(e){}
+      if (data) return data;
+      try {
+        if (window.name && window.name.startsWith("AUTOQUIZ_SESSION:")) {
+          data = parseSessionRaw(window.name.substring("AUTOQUIZ_SESSION:".length));
+        }
+      } catch(e){}
+      return data;
+    }
+
+    function clearSession() {
+      try { localStorage.removeItem(SESSION_KEY); } catch(e){}
+      try { sessionStorage.removeItem(SESSION_KEY); } catch(e){}
+      try {
+        document.cookie = SESSION_KEY + "=; max-age=0; path=/; SameSite=None; Secure; Partitioned";
+        document.cookie = SESSION_KEY + "=; max-age=0; path=/; SameSite=Lax";
+      } catch(e){}
+      try { if (window.name && window.name.startsWith("AUTOQUIZ_SESSION:")) window.name = ""; } catch(e){}
+    }
+
+    // =========================================================================
+    // 6. OUTILS UI : TOAST, MODALES & COPIE PRESSE-PAPIERS SÉCURISÉE
+    // =========================================================================
+    function escapeHtml(str) {
+      return String(str === undefined || str === null ? "" : str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast-msg');
+      t.innerText = msg;
+      t.style.display = 'block';
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => { t.style.display = 'none'; }, 3400);
+    }
+
+    function openModal(title, bodyHtml, buttons) {
+      document.getElementById('modal-title').innerText = title;
+      document.getElementById('modal-body').innerHTML = bodyHtml;
+      const actions = document.getElementById('modal-actions');
+      actions.innerHTML = '';
+      (buttons || []).forEach(b => {
+        const btn = document.createElement('button');
+        btn.className = 'btn ' + (b.cls || 'btn-dark');
+        btn.innerText = b.label;
+        btn.onclick = () => { if (b.onClick) b.onClick(); };
+        actions.appendChild(btn);
+      });
+      document.getElementById('custom-modal').classList.add('open');
+    }
+
+    function closeModal() { document.getElementById('custom-modal').classList.remove('open'); }
+
+    function safeCopyText(text, successMsg) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text)
+          .then(() => showToast(successMsg || "📋 Copié !"))
+          .catch(() => fallbackCopyExec(text, successMsg));
+      } else {
+        fallbackCopyExec(text, successMsg);
+      }
+    }
+
+    function fallbackCopyExec(text, successMsg) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) {}
+      document.body.removeChild(ta);
+      if (ok) showToast(successMsg || "📋 Copié !");
+      else {
+        openModal("📋 Copie manuelle", `<p style="margin-bottom:8px; font-size:0.9rem; color:var(--text-muted);">Sélectionnez et copiez (Ctrl+C) :</p><textarea rows="6" readonly onclick="this.select()" style="font-family:monospace; font-size:0.85rem;">${escapeHtml(text)}</textarea>`, [{ label: "Fermer", cls: "btn-dark", onClick: closeModal }]);
+      }
+    }
+
+    // =========================================================================
+    // 7. GIFS DE FIN & ÉQUIPES PAR DÉFAUT
+    // =========================================================================
+    const END_GIFS = {
+      rank1: [
+        "https://media.tenor.com/7I-iXp5w8_8AAAAi/leonardo-dicaprio.gif",
+        "https://media.tenor.com/Z1mH2o9-76kAAAAi/dance-carlton.gif",
+        "https://media.tenor.com/bZe3hDq8HGEAAAAi/spongebob-squarepants-patrick-star.gif"
+      ],
+      rank2: [
+        "https://media.tenor.com/7d7a1t32G_0AAAAi/the-office-dwight-schrute.gif",
+        "https://media.tenor.com/X4bLh6U7I9oAAAAi/high-five-todd-fives.gif",
+        "https://media.tenor.com/V7U6298G8q4AAAAi/thumbs-up-computer-kid.gif"
+      ],
+      rank3: [
+        "https://media.tenor.com/aC-YqgM-v4wAAAAi/cat-climbing.gif",
+        "https://media.tenor.com/u7q7F4M34cEAAAAi/never-give-up.gif",
+        "https://media.tenor.com/z6G0hUqjMdkAAAAi/climbing.gif"
+      ],
+      other: [
+        "https://media.tenor.com/YwNq9U154eAAAAAi/you-got-this-dog.gif",
+        "https://media.tenor.com/6X2pD1mX_FwAAAAi/cute-puppy.gif",
+        "https://media.tenor.com/d94K7P25W6QAAAAi/high-five-dog.gif"
+      ]
+    };
+
+    let appConfig = {
+      joinUrl: "",
+      gmHash: DEFAULT_GM_HASH,
+      teams: [
+        { id: "t1", name: "🔴 Plateau Nord", color: "#ef4444" },
+        { id: "t2", name: "🔵 Plateau Sud", color: "#3b82f6" },
+        { id: "t3", name: "🟢 Acheteurs VO", color: "#22c55e" },
+        { id: "t4", name: "🟡 Experts Reprise", color: "#eab308" }
+      ]
+    };
+
+    function getEffectiveJoinUrl() {
+      if (appConfig.joinUrl && appConfig.joinUrl.trim()) return appConfig.joinUrl.trim();
+      const h = location.hostname || "";
+      if (!h || h.includes('googleusercontent.com') || location.protocol === 'file:' || location.href.startsWith('about:')) {
+        return `https://${firebaseConfig.projectId}.web.app`;
+      }
+      return location.origin + location.pathname;
+    }
+
+    // =========================================================================
+    // 8. BASE DE QUIZ PAR DÉFAUT (DÉMO MULTI-FORMATS) & CLOUD SYNC
+    // =========================================================================
+    const DEFAULT_DB = {
+      "week-44": {
+        label: "Démo Show TV : Expertise & Cote B2B",
+        events: [
+          {
+            type: "qcm",
+            q: "Lors de l'expertise d'un VO marchand, quel élément fait le plus chuter sa valeur de reprise immédiate ?",
+            qImg: "", opts: ["Historique d'entretien absent", "Micro-rayures pare-chocs", "Pneus usés à 50%", "Tapis conducteur absent"],
+            optImgs: ["","","",""], correct: 0, clue: "Pensez à la traçabilité mécanique lors de la revente.", cImg: "",
+            anecdote: "L'absence d'historique d'entretien entraîne une décote B2B immédiate de 10 % à 20 % par précaution mécanique.", aImg: ""
+          },
+          {
+            type: "estimate",
+            q: "Juste Prix VO : Estimez la valeur marchande B2B d'une Peugeot 308 BlueHDi 130 EAT8 (2022 - 68 000 km, suivi complet, frais carrosserie 400 €).",
+            qImg: "", opts: ["","","",""], optImgs: ["","","",""], correct: 0,
+            min: 9000, max: 21000, step: 250, targetVal: 14500, tolerance: 1750, unit: "€",
+            clue: "Prix affiché B2C constaté autour de 17 400 € TTC.", cImg: "",
+            anecdote: "Avec 17 400 € en B2C moins la marge distributeur, la garantie et 400 € de FRE, le positionnement B2B optimal se situe autour de 14 500 €.", aImg: ""
+          },
+          {
+            type: "multi",
+            q: "Multi-réponses : Quels points doivent obligatoirement figurer dans un commentaire d'inspection B2B fiable ?",
+            qImg: "", opts: ["Voyants moteur ou défauts OBD", "Couleur préférée de l'ancien propriétaire", "État précis des pneumatiques & freins", "Présence du double des clés"],
+            optImgs: ["","","",""], correct: 0, correctMulti: [0, 2, 3],
+            clue: "Il y a 3 bonnes réponses liées aux coûts de remise en état.", cImg: "",
+            anecdote: "Les défauts OBD, l'usure pneus/freins et le double des clés impactent directement le chiffrage des frais de remise en état (FRE).", aImg: ""
+          },
+          {
+            type: "tf",
+            q: "Vrai ou Faux : Le prix de réserve correspond au montant minimum en dessous duquel le vendeur refuse de céder son véhicule aux enchères.",
+            qImg: "", opts: ["Vrai", "Faux", "", ""], optImgs: ["","","",""], correct: 0,
+            clue: "C'est un seuil de sécurité fixé avant la vente.", cImg: "",
+            anecdote: "Vrai ! Tant que le prix de réserve n'est pas atteint, la vente n'est pas adjugée automatiquement.", aImg: ""
+          }
+        ]
+      }
+    };
+
+    let customEditions = {};
+    let editorModel = { label: "", events: [] };
+    let editorEditingId = null;
+
+    function normalizeQuestion(ev) {
+      const e = Object.assign({
+        type: 'qcm', q: '', qImg: '',
+        opts: ['', '', '', ''], optImgs: ['', '', '', ''],
+        correct: 0, correctMulti: [0],
+        min: 0, max: 20000, step: 100, targetVal: 10000, tolerance: 1500, unit: '€',
+        hotspot: { x: 50, y: 50, w: 22, h: 22 },
+        clue: '', cImg: '', anecdote: '', aImg: ''
+      }, ev || {});
+      e.opts = Array.isArray(e.opts) ? e.opts : ['', '', '', ''];
+      while (e.opts.length < 4) e.opts.push('');
+      e.optImgs = Array.isArray(e.optImgs) ? e.optImgs : ['', '', '', ''];
+      while (e.optImgs.length < 4) e.optImgs.push('');
+      if (e.type === 'tf') { e.opts[0] = 'Vrai'; e.opts[1] = 'Faux'; }
+      e.correct = typeof e.correct === 'number' ? e.correct : 0;
+      e.correctMulti = Array.isArray(e.correctMulti) ? e.correctMulti.map(Number) : [e.correct];
+      e.hotspot = Object.assign({ x: 50, y: 50, w: 22, h: 22 }, e.hotspot || {});
+      e.min = Number(e.min) || 0;
+      e.max = Number(e.max) || 10000;
+      if (e.max <= e.min) e.max = e.min + 1000;
+      e.step = Number(e.step) > 0 ? Number(e.step) : 100;
+      e.targetVal = Number(e.targetVal) || Math.round((e.min + e.max) / 2);
+      e.tolerance = Number(e.tolerance) > 0 ? Number(e.tolerance) : Math.max(e.step, Math.round((e.max - e.min) * 0.1));
+      return e;
+    }
+
+    function loadLocalEditionsFallback() {
+      try {
+        const saved = localStorage.getItem('autoquiz_editions_v5');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          Object.keys(parsed).forEach(k => {
+            parsed[k].events = (parsed[k].events || []).map(normalizeQuestion);
+            customEditions[k] = parsed[k];
+          });
+        }
+      } catch(e){}
+    }
+
+    function getFullDB() { return Object.assign({}, DEFAULT_DB, customEditions); }
+
+    function updateSelectMenus() {
+      const full = getFullDB();
+      const presSel = document.getElementById('gm-pres-selector');
+      const editSel = document.getElementById('gm-edit-selector');
+      const prevPres = presSel ? presSel.value : '';
+      const prevEdit = editSel ? editSel.value : '';
+
+      let html = '';
+      Object.keys(full).forEach(k => {
+        html += `<option value="${escapeHtml(k)}">${k.startsWith('custom-') ? '☁️ ' : '⭐ '}${escapeHtml(full[k].label)}</option>`;
+      });
+      if (presSel) { presSel.innerHTML = html; if (full[prevPres]) presSel.value = prevPres; }
+      if (editSel) { editSel.innerHTML = html; if (full[prevEdit]) editSel.value = prevEdit; }
+    }
+
+    // =========================================================================
+    // 9. VARIABLES D'ÉTAT & DÉMARRAGE
+    // =========================================================================
+    let myRole = 'login';
+    let myUid = null;
+    let myName = "";
+    let myAccount = {};
+    let myPlayer = { score: 0, vote: -1, streak: 0 };
+    let currentGMTab = 'pres';
+    let isLoggingOut = false;
+    let networkStarted = false;
+    let isTVMode = false;
+
+    let gameState = {
+      status: 'lobby', quizId: 'week-44', quizLabel: '', qIndex: 0, totalQuestions: 0,
+      isRevealed: false, isClueOpen: false, doublePoints: false, showMidBoard: false,
+      scoringMode: 'speed', timerDuration: 20, timerEndAt: 0, startedAt: 0,
+      teamMode: 'solo', jokersEnabled: true,
+      currentQ: null, revealData: null, leaderboard: [], teamLeaderboard: [], historyStats: [], scoresSaved: false
+    };
+
+    let playersData = {};
+    let globalAccounts = {};
+    let lastPlayerRenderSignature = "";
+    let lastGMRenderSignature = "";
+    let localMultiSelection = [];
+    let localBetChoice = 'safe';
+    let lastTickSecond = -1;
+    let lastReactionSentAt = 0;
+
+    function normalizeGameState(raw) {
+      const base = {
+        status: 'lobby', quizId: 'week-44', quizLabel: '', qIndex: 0, totalQuestions: 0,
+        isRevealed: false, isClueOpen: false, doublePoints: false, showMidBoard: false,
+        scoringMode: 'speed', timerDuration: 20, timerEndAt: 0, startedAt: 0,
+        teamMode: 'solo', jokersEnabled: true,
+        currentQ: null, revealData: null, leaderboard: [], teamLeaderboard: [], historyStats: [], scoresSaved: false
+      };
+      const st = Object.assign(base, raw || {});
+      st.leaderboard = Array.isArray(st.leaderboard) ? st.leaderboard : [];
+      st.teamLeaderboard = Array.isArray(st.teamLeaderboard) ? st.teamLeaderboard : [];
+      st.historyStats = Array.isArray(st.historyStats) ? st.historyStats : [];
+      if (st.currentQ) st.currentQ = normalizeQuestion(st.currentQ);
+      return st;
+    }
+
+    window.onload = () => {
+      loadLocalEditionsFallback();
+      updateSelectMenus();
+      restoreSessionConfigDraft();
+      startGlobalTimerLoop();
+
+      const data = loadSession();
+      if (data) {
+        myRole = data.role;
+        myUid = data.myUid || null;
+        myName = data.myName || "";
+        currentGMTab = data.gmTab || 'pres';
+
+        if (myRole === 'joueur' && myUid) {
+          applyView();
+          document.getElementById('player-ui-name').innerText = myName;
+          requestMobileWakeLock();
+          startNetwork();
+        } else if (myRole === 'maitre') {
+          applyView();
+          startNetwork();
+          if (currentGMTab === 'edit' && !editorEditingId) {
+            loadEditionIntoEditor(document.getElementById('gm-edit-selector').value);
+          }
+        } else {
+          myRole = 'login';
+          applyView();
+        }
+      } else if (auth) {
+        auth.onAuthStateChanged(user => {
+          if (user && myRole === 'login' && !isLoggingOut) {
+            const uid = "g_" + user.uid;
+            const defaultName = (user.displayName || (user.email ? user.email.split('@')[0] : "Joueur")).substring(0, 20);
+            db.ref('accounts/' + uid).once('value', snap => {
+              const acc = snap.val();
+              if (acc) finalizePlayerLogin(uid, acc.name || defaultName, acc.globalScore || 0);
+              else {
+                const newAcc = { name: defaultName, email: user.email || "", provider: "google", globalScore: 0 };
+                db.ref('accounts/' + uid).set(newAcc);
+                finalizePlayerLogin(uid, defaultName, 0);
+              }
+            });
+          }
+        });
+      }
+    };
+
+    function applyView() {
+      document.body.className = '';
+      if (isTVMode) document.body.classList.add('is-tv-mode');
+      if (myRole === 'login') document.body.classList.add('mode-login');
+      else if (myRole === 'joueur') document.body.classList.add('mode-player');
+      else if (myRole === 'maitre') document.body.classList.add('mode-gm-' + currentGMTab);
+    }
+
+    function switchGMTab(tab) {
+      if (myRole !== 'maitre') return;
+      if (tab !== 'pres' && isTVMode) isTVMode = false;
+      currentGMTab = tab;
+      saveSession({ role: myRole, myUid: null, myName: "GM", gmTab: currentGMTab });
+      applyView();
+      if (tab === 'edit' && !editorEditingId) {
+        loadEditionIntoEditor(document.getElementById('gm-edit-selector').value);
+      }
+      renderUIs(true);
+    }
+
+    function leaveGame() {
+      isLoggingOut = true;
+      const prevRole = myRole;
+      const prevUid = myUid;
+      myRole = 'login';
+      clearSession();
+
+      const tasks = [];
+      if (prevRole === 'joueur' && prevUid && db) {
+        tasks.push(db.ref('players/' + prevUid).update({ online: false }).catch(() => {}));
+      }
+      if (auth) tasks.push(auth.signOut().catch(() => {}));
+
+      const fallback = setTimeout(() => location.reload(), 1200);
+      Promise.all(tasks).finally(() => { clearTimeout(fallback); location.reload(); });
+    }
+
+    // =========================================================================
+    // 10. AUTHENTIFICATION GOOGLE, PSEUDO SHA-256 & MAÎTRE DU JEU
+    // =========================================================================
+    function loginWithGoogle() {
+      const err = document.getElementById('login-error');
+      err.style.display = 'none';
+      const provider = new firebase.auth.GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+
+      auth.signInWithPopup(provider).then((result) => {
+        const user = result.user;
+        const uid = "g_" + user.uid;
+        const defaultName = (user.displayName || (user.email ? user.email.split('@')[0] : "Joueur")).substring(0, 20);
+
+        db.ref('accounts/' + uid).once('value', snap => {
+          const acc = snap.val();
+          if (acc) {
+            db.ref('accounts/' + uid).update({ email: user.email || "" });
+            finalizePlayerLogin(uid, acc.name || defaultName, acc.globalScore || 0);
+          } else {
+            const newAcc = { name: defaultName, email: user.email || "", provider: "google", globalScore: 0 };
+            db.ref('accounts/' + uid).set(newAcc);
+            finalizePlayerLogin(uid, defaultName, 0);
+          }
+        });
+      }).catch((error) => {
+        const code = error && error.code ? error.code : '';
+        const directUrl = getEffectiveJoinUrl();
+        if (code === 'auth/unauthorized-domain' || code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
+          err.innerHTML = `La fenêtre Google est bloquée par ce cadre intégré ou navigateur interne.<br>👉 Utilisez un <strong>Pseudo</strong> ci-dessous ou <a href="${escapeHtml(directUrl)}" target="_blank" rel="noopener" style="color:var(--gold-trophy); text-decoration:underline;">ouvrez le quiz dans un nouvel onglet</a>.`;
+        } else if (code !== 'auth/popup-closed-by-user') {
+          err.innerText = "Connexion Google indisponible (" + (error.message || code) + "). Utilisez un pseudo ci-dessous.";
+        } else {
+          return;
+        }
+        err.style.display = 'block';
+      });
+    }
+
+    async function loginAsPlayer() {
+      const pseudo = document.getElementById('login-pseudo').value.trim();
+      const pwd = document.getElementById('login-pwd').value.trim();
+      const err = document.getElementById('login-error');
+      err.style.display = 'none';
+
+      const key = pseudoToAccountKey(pseudo);
+      if (!key) {
+        err.innerText = "Veuillez saisir un pseudo valide (au moins 2 lettres ou chiffres).";
+        err.style.display = 'block';
+        return;
+      }
+      if (!pwd) {
+        err.innerText = "Veuillez saisir un mot de passe.";
+        err.style.display = 'block';
+        return;
+      }
+
+      const inputHash = await sha256Hex(pwd);
+
+      db.ref('accounts/' + key).once('value', snap => {
+        const acc = snap.val();
+        if (acc) {
+          const matchHash = acc.pwdHash && acc.pwdHash === inputHash;
+          const matchLegacy = !acc.pwdHash && acc.password && acc.password === pwd;
+          if (!matchHash && !matchLegacy) {
+            err.innerText = "Mot de passe incorrect pour ce pseudo.";
+            err.style.display = 'block';
+            return;
+          }
+          // Migration transparente des anciens mots de passe en clair vers SHA-256
+          if (matchLegacy) {
+            db.ref('accounts/' + key).update({ pwdHash: inputHash, password: null });
+          }
+          finalizePlayerLogin(key, acc.name || pseudo, acc.globalScore || 0);
+        } else {
+          openModal(
+            "Créer votre compte joueur",
+            `Le pseudo <strong>"${escapeHtml(pseudo)}"</strong> est disponible. Voulez-vous créer ce compte ?`,
+            [
+              { label: "Annuler", cls: "btn-dark", onClick: closeModal },
+              { label: "Créer et rejoindre", cls: "btn-green", onClick: () => {
+                  closeModal();
+                  db.ref('accounts/' + key).set({ name: pseudo, provider: "local", pwdHash: inputHash, globalScore: 0 });
+                  finalizePlayerLogin(key, pseudo, 0);
+                }
+              }
+            ]
+          );
+        }
+      });
+    }
+
+    function finalizePlayerLogin(uid, name, globalScore) {
+      myName = name; myUid = uid; myRole = 'joueur';
+      saveSession({ role: myRole, myUid, myName });
+      document.getElementById('player-ui-name').innerText = myName;
+      document.getElementById('player-ui-global-score').innerText = globalScore;
+      applyView();
+      requestMobileWakeLock();
+      startNetwork();
+    }
+
+    function openGMLoginModal() {
+      openModal(
+        "👑 Accès Studio Maître du Jeu",
+        `<p style="color:var(--text-muted); margin-bottom:12px;">Saisissez le code animateur :</p>
+         <input type="password" id="gm-pwd-input" placeholder="Code animateur" onkeydown="if(event.key==='Enter') submitGMLogin()">
+         <p id="gm-pwd-err" style="color:#f87171; margin-top:10px; display:none; font-weight:bold;">Code animateur incorrect.</p>`,
+        [
+          { label: "Annuler", cls: "btn-dark", onClick: closeModal },
+          { label: "Ouvrir le Studio", cls: "btn-green", onClick: submitGMLogin }
+        ]
+      );
+      setTimeout(() => { const inp = document.getElementById('gm-pwd-input'); if (inp) inp.focus(); }, 90);
+    }
+
+    async function submitGMLogin() {
+      const val = (document.getElementById('gm-pwd-input').value || '').trim();
+      const hashed = await sha256Hex(val);
+      let targetHash = appConfig.gmHash || DEFAULT_GM_HASH;
+      try {
+        const snap = await db.ref('config/gmHash').once('value');
+        if (snap.exists() && snap.val()) targetHash = snap.val();
+      } catch (e) {}
+
+      if (hashed === targetHash) {
+        closeModal();
+        myRole = 'maitre';
+        currentGMTab = window.innerWidth < 720 ? 'remote' : 'pres';
+        saveSession({ role: myRole, myUid: null, myName: "GM", gmTab: currentGMTab });
+        applyView();
+        startNetwork();
+      } else {
+        document.getElementById('gm-pwd-err').style.display = 'block';
+      }
+    }
+
+    // =========================================================================
+    // 11. RÉSEAU TEMPS RÉEL OPTIMISÉ (ANTI-SURCHARGE MOBILE & ANTI-TRICHE)
+    // =========================================================================
+    function startNetwork() {
+      if (networkStarted) return;
+      networkStarted = true;
+
+      // Configuration globale (équipes, URL QR)
+      db.ref('config').on('value', snap => {
+        if (snap.exists()) {
+          const c = snap.val();
+          if (c.joinUrl !== undefined) appConfig.joinUrl = c.joinUrl;
+          if (c.gmHash) appConfig.gmHash = c.gmHash;
+          if (Array.isArray(c.teams) && c.teams.length > 0) appConfig.teams = c.teams;
+          renderTeamSelectorForPlayer();
+          if (myRole === 'maitre' && gameState.status === 'lobby') renderGMPresView(true);
+        }
+      });
+
+      // État de la partie (léger : uniquement la question active sans la réponse secrète avant révélation)
+      db.ref('state').on('value', snap => {
+        const prevRevealed = gameState.isRevealed;
+        const prevStatus = gameState.status;
+        const prevQIndex = gameState.qIndex;
+        gameState = normalizeGameState(snap.val());
+
+        if (prevQIndex !== gameState.qIndex || prevStatus !== gameState.status) {
+          localMultiSelection = [];
+          lastTickSecond = -1;
+        }
+        if (myRole === 'maitre') {
+          if (!prevRevealed && gameState.isRevealed) playSound('reveal');
+          if (prevStatus !== 'leaderboard' && gameState.status === 'leaderboard') playSound('podium');
+        }
+        renderUIs(false);
+      });
+
+      if (myRole === 'joueur' && myUid) {
+        // Présence temps réel & inscription du joueur sans écouter les autres joueurs
+        const myPlayerRef = db.ref('players/' + myUid);
+        db.ref('.info/connected').on('value', snap => {
+          if (snap.val() === true) {
+            myPlayerRef.onDisconnect().update({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP });
+            myPlayerRef.once('value', pSnap => {
+              const defaultTeam = (appConfig.teams[0] && appConfig.teams[0].id) || 't1';
+              if (!pSnap.exists()) {
+                myPlayerRef.set({
+                  name: myName, score: 0, vote: -1, streak: 0,
+                  team: defaultTeam, online: true, used5050: false, usedDouble: false, personalDouble: false
+                });
+              } else {
+                myPlayerRef.update({ name: myName, online: true });
+              }
+            });
+          }
+        });
+
+        // Le joueur écoute UNIQUEMENT sa propre fiche joueur (zéro re-render quand les autres votent !)
+        myPlayerRef.on('value', snap => {
+          myPlayer = snap.val() || { name: myName, score: 0, vote: -1, streak: 0 };
+          document.getElementById('player-ui-score').innerText = (myPlayer.score || 0) + " pts";
+          const stEl = document.getElementById('player-ui-streak');
+          stEl.innerText = (myPlayer.streak || 0) >= 2 ? `🔥x${myPlayer.streak}` : '';
+          if (myPlayer.name && myPlayer.name !== myName) {
+            myName = myPlayer.name;
+            document.getElementById('player-ui-name').innerText = myName;
+            saveSession({ role: myRole, myUid, myName });
+          }
+          renderTeamSelectorForPlayer();
+          updatePlayerInteractiveState();
+        });
+
+        // Le joueur écoute UNIQUEMENT son propre compte carrière (confidentialité totale)
+        db.ref('accounts/' + myUid).on('value', snap => {
+          myAccount = snap.val() || {};
+          if (myAccount.name && myAccount.name !== myName) {
+            myName = myAccount.name;
+            document.getElementById('player-ui-name').innerText = myName;
+            saveSession({ role: myRole, myUid, myName });
+          }
+          document.getElementById('player-ui-global-score').innerText = myAccount.globalScore || 0;
+        });
+      }
+
+      if (myRole === 'maitre') {
+        // Synchronisation Cloud des Quiz personnalisés + migration automatique depuis localStorage
+        db.ref('editions').on('value', snap => {
+          const cloud = snap.val() || {};
+          Object.keys(customEditions).forEach(localKey => {
+            if (!cloud[localKey]) {
+              db.ref('editions/' + localKey).set(cleanFirebaseObj(customEditions[localKey]));
+            }
+          });
+          Object.keys(cloud).forEach(k => {
+            cloud[k].events = (cloud[k].events || []).map(normalizeQuestion);
+            customEditions[k] = cloud[k];
+          });
+          try { localStorage.setItem('autoquiz_editions_v5', JSON.stringify(customEditions)); } catch(e){}
+          updateSelectMenus();
+        });
+
+        // Écoute des joueurs côté GM : met à jour les compteurs en direct SANS détruire le DOM principal
+        db.ref('players').on('value', snap => {
+          playersData = snap.val() || {};
+          handlePending5050Requests();
+          updateGMSidebarAndLiveCounters();
+          if (currentGMTab === 'remote') renderGMRemoteView();
+          if (gameState.status === 'lobby') renderGMPresView(true);
+        });
+
+        // Écoute des comptes côté GM
+        db.ref('accounts').on('value', snap => {
+          globalAccounts = snap.val() || {};
+          renderGMAccountsView();
+          updateLeaderboardDropdown();
+        });
+
+        // Écoute des émojis flottants en direct
+        db.ref('reactions').limitToLast(1).on('child_added', snap => {
+          const r = snap.val();
+          if (r && r.ts && (nowServer() - r.ts < 6000)) {
+            spawnFloatingEmoji(r.emoji);
+          }
+          snap.ref.remove().catch(() => {});
+        });
+
+        db.ref('state').once('value', snap => {
+          if (!snap.exists()) pushState();
+        });
+      }
+    }
+
+    function pushState() {
+      if (myRole === 'maitre' && db) {
+        db.ref('state').set(cleanFirebaseObj(gameState));
+      }
+    }
+
+    // =========================================================================
+    // 12. BOUCLE DE CHRONOMÈTRE SYNCHRONISÉE (SANS TRAFIC RÉSEAU)
+    // =========================================================================
+    function startGlobalTimerLoop() {
+      setInterval(() => {
+        const isTimed = gameState.status === 'question' && !gameState.isRevealed && gameState.timerDuration > 0 && gameState.timerEndAt > 0;
+        const pWrap = document.getElementById('player-timer-wrap');
+        const gWrap = document.getElementById('gm-timer-wrap');
+
+        if (!isTimed) {
+          if (pWrap) pWrap.style.display = 'none';
+          if (gWrap) gWrap.style.display = 'none';
+          return;
+        }
+
+        const remMs = Math.max(0, gameState.timerEndAt - nowServer());
+        const pct = Math.max(0, Math.min(100, (remMs / (gameState.timerDuration * 1000)) * 100));
+        const remSec = Math.ceil(remMs / 1000);
+
+        if (myRole === 'joueur' && pWrap) {
+          pWrap.style.display = 'block';
+          document.getElementById('player-timer-bar').style.width = pct + '%';
+          if (remMs === 0) updatePlayerInteractiveState();
+        }
+        if (myRole === 'maitre' && gWrap) {
+          gWrap.style.display = 'block';
+          document.getElementById('gm-timer-bar').style.width = pct + '%';
+          const badge = document.getElementById('tv-timer-seconds');
+          if (badge) badge.innerText = remSec + 's';
+          const rBadge = document.getElementById('remote-timer-seconds');
+          if (rBadge) rBadge.innerText = remSec + 's';
+
+          if (remSec !== lastTickSecond) {
+            lastTickSecond = remSec;
+            if (remSec > 0 && remSec <= 5) playSound('tick');
+            else if (remSec === 0) playSound('gong');
+          }
+        }
+      }, 180);
+    }
+
+    function isQuestionTimeUp() {
+      return gameState.timerDuration > 0 && gameState.timerEndAt > 0 && nowServer() >= gameState.timerEndAt;
+    }
+
+    // =========================================================================
+    // 13. LOGIQUE MÉTIER DU JEU, JOKERS, SCORES & CLASSEMENTS EX-AEQUO
+    // =========================================================================
+    function saveSessionConfigDraft() {
+      try {
+        const cfg = {
+          scoring: document.getElementById('cfg-scoring').value,
+          timer: document.getElementById('cfg-timer').value,
+          teams: document.getElementById('cfg-teams').value,
+          jokers: document.getElementById('cfg-jokers').value
+        };
+        localStorage.setItem('autoquiz_gm_cfg', JSON.stringify(cfg));
+      } catch(e){}
+    }
+
+    function restoreSessionConfigDraft() {
+      try {
+        const raw = localStorage.getItem('autoquiz_gm_cfg');
+        if (!raw) return;
+        const cfg = JSON.parse(raw);
+        if (cfg.scoring) document.getElementById('cfg-scoring').value = cfg.scoring;
+        if (cfg.timer !== undefined) document.getElementById('cfg-timer').value = cfg.timer;
+        if (cfg.teams) document.getElementById('cfg-teams').value = cfg.teams;
+        if (cfg.jokers !== undefined) document.getElementById('cfg-jokers').value = cfg.jokers;
+      } catch(e){}
+    }
+
+    function buildPublicQuestionPayload(fullEv, includeClue) {
+      return {
+        type: fullEv.type || 'qcm',
+        q: fullEv.q || '',
+        qImg: fullEv.qImg || '',
+        opts: fullEv.opts || ['','','',''],
+        optImgs: fullEv.optImgs || ['','','',''],
+        min: fullEv.min, max: fullEv.max, step: fullEv.step, unit: fullEv.unit || '€',
+        clue: includeClue ? (fullEv.clue || '') : '',
+        cImg: includeClue ? (fullEv.cImg || '') : ''
+      };
+    }
+
+    function getActiveFullQuestion() {
+      const quiz = getFullDB()[gameState.quizId];
+      if (!quiz || !quiz.events || !quiz.events[gameState.qIndex]) return null;
+      return normalizeQuestion(quiz.events[gameState.qIndex]);
+    }
+
+    function launchQuiz() {
+      const key = document.getElementById('gm-pres-selector').value;
+      const data = getFullDB()[key];
+      if (!data || !data.events || data.events.length === 0) return showToast("⚠️ Ce quiz ne contient aucune question.");
+
+      const scoringMode = document.getElementById('cfg-scoring').value;
+      const timerDuration = parseInt(document.getElementById('cfg-timer').value, 10) || 0;
+      const teamMode = document.getElementById('cfg-teams').value;
+      const jokersEnabled = document.getElementById('cfg-jokers').value === '1';
+
+      const updates = {};
+      const now = nowServer();
+      Object.keys(playersData).forEach(uid => {
+        const p = playersData[uid];
+        // Nettoyage automatique des joueurs déconnectés depuis plus de 45 min
+        if (p.online === false && p.lastSeen && (now - p.lastSeen > 45 * 60 * 1000)) {
+          updates[uid] = null;
+        } else {
+          updates[uid + '/score'] = 0;
+          updates[uid + '/streak'] = 0;
+          updates[uid + '/vote'] = -1;
+          updates[uid + '/voteMulti'] = null;
+          updates[uid + '/voteNum'] = null;
+          updates[uid + '/votePt'] = null;
+          updates[uid + '/votedAt'] = null;
+          updates[uid + '/elimOpts'] = null;
+          updates[uid + '/req5050'] = null;
+          updates[uid + '/used5050'] = false;
+          updates[uid + '/usedDouble'] = false;
+          updates[uid + '/personalDouble'] = false;
+          updates[uid + '/lastDelta'] = 0;
+          updates[uid + '/lastCorrect'] = null;
+        }
+      });
+      if (Object.keys(updates).length > 0) db.ref('players').update(updates);
+
+      const firstEv = normalizeQuestion(data.events[0]);
+      const startTs = nowServer();
+
+      gameState = {
+        status: 'question',
+        quizId: key,
+        quizLabel: data.label || 'Quiz Auto B2B',
+        qIndex: 0,
+        totalQuestions: data.events.length,
+        isRevealed: false,
+        isClueOpen: false,
+        doublePoints: false,
+        showMidBoard: false,
+        scoringMode: scoringMode,
+        timerDuration: timerDuration,
+        startedAt: startTs,
+        timerEndAt: timerDuration > 0 ? startTs + timerDuration * 1000 : 0,
+        teamMode: teamMode,
+        jokersEnabled: jokersEnabled,
+        currentQ: buildPublicQuestionPayload(firstEv, false),
+        revealData: null,
+        leaderboard: [],
+        teamLeaderboard: [],
+        historyStats: [],
+        scoresSaved: false
+      };
+      pushState();
+    }
+
+    function toggleClue() {
+      if (gameState.status !== 'question' || gameState.isRevealed) return;
+      const fullEv = getActiveFullQuestion();
+      if (!fullEv) return;
+      gameState.isClueOpen = !gameState.isClueOpen;
+      gameState.currentQ = buildPublicQuestionPayload(fullEv, gameState.isClueOpen);
+      pushState();
+    }
+
+    function toggleDoublePoints() {
+      if (gameState.status !== 'question' || gameState.isRevealed) return;
+      gameState.doublePoints = !gameState.doublePoints;
+      pushState();
+      showToast(gameState.doublePoints ? "⚡ Manche POINTS DOUBLES activée !" : "Manche repassée en points normaux.");
+    }
+
+    // Traitement sécurisé côté GM des demandes de Joker 50/50 (sans exposer la bonne réponse dans state)
+    function handlePending5050Requests() {
+      if (myRole !== 'maitre' || gameState.status !== 'question' || gameState.isRevealed) return;
+      const fullEv = getActiveFullQuestion();
+      if (!fullEv || fullEv.type !== 'qcm') return;
+
+      Object.keys(playersData).forEach(uid => {
+        const p = playersData[uid];
+        if (p && p.req5050 === gameState.qIndex && !Array.isArray(p.elimOpts)) {
+          const wrongs = [0, 1, 2, 3].filter(i => i !== fullEv.correct);
+          wrongs.sort(() => Math.random() - 0.5);
+          db.ref('players/' + uid).update({
+            elimOpts: wrongs.slice(0, 2),
+            used5050: true
+          });
+        }
+      });
+    }
+
+    function evaluatePlayerAnswer(p, fullEv) {
+      const qType = fullEv.type || 'qcm';
+      if (qType === 'poll') return { ratio: 0, status: 'poll' };
+      if (!p || p.vote === -1 || p.vote === undefined) return { ratio: 0, status: 'none' };
+
+      if (qType === 'qcm' || qType === 'tf') {
+        const ok = Number(p.vote) === Number(fullEv.correct);
+        return { ratio: ok ? 1 : 0, status: ok ? 'correct' : 'wrong' };
+      }
+      if (qType === 'multi') {
+        const picked = Array.isArray(p.voteMulti) ? p.voteMulti.map(Number) : [];
+        const expected = Array.isArray(fullEv.correctMulti) && fullEv.correctMulti.length > 0 ? fullEv.correctMulti.map(Number) : [fullEv.correct];
+        if (picked.length === 0) return { ratio: 0, status: 'none' };
+        let good = 0, bad = 0;
+        picked.forEach(idx => { if (expected.includes(idx)) good++; else bad++; });
+        const rawRatio = Math.max(0, (good - bad) / expected.length);
+        return {
+          ratio: rawRatio,
+          status: rawRatio === 1 ? 'correct' : (rawRatio > 0 ? 'partial' : 'wrong')
+        };
+      }
+      if (qType === 'estimate') {
+        const val = Number(p.voteNum);
+        if (isNaN(val)) return { ratio: 0, status: 'none' };
+        const diff = Math.abs(val - fullEv.targetVal);
+        const tol = Math.max(1, Number(fullEv.tolerance) || 1000);
+        if (diff <= tol * 0.15) return { ratio: 1, status: 'correct' };
+        if (diff <= tol) {
+          const r = 0.35 + 0.60 * (1 - diff / tol);
+          return { ratio: r, status: 'partial' };
+        }
+        return { ratio: 0, status: 'wrong' };
+      }
+      if (qType === 'hotspot') {
+        const pt = p.votePt;
+        if (!pt || typeof pt.x !== 'number') return { ratio: 0, status: 'none' };
+        const hs = fullEv.hotspot || { x: 50, y: 50, w: 22, h: 22 };
+        const insideX = pt.x >= (hs.x - hs.w / 2) && pt.x <= (hs.x + hs.w / 2);
+        const insideY = pt.y >= (hs.y - hs.h / 2) && pt.y <= (hs.y + hs.h / 2);
+        return { ratio: (insideX && insideY) ? 1 : 0, status: (insideX && insideY) ? 'correct' : 'wrong' };
+      }
+      return { ratio: 0, status: 'wrong' };
+    }
+
+    function computeRankedList(rawPlayersObj) {
+      const arr = Object.keys(rawPlayersObj).map(uid => ({
+        uid,
+        name: rawPlayersObj[uid].name || 'Joueur',
+        score: rawPlayersObj[uid].score || 0,
+        streak: rawPlayersObj[uid].streak || 0,
+        team: rawPlayersObj[uid].team || 't1',
+        online: rawPlayersObj[uid].online !== false
+      })).sort((a, b) => b.score - a.score);
+
+      // Vrais rangs ex-aequo (1, 1, 3...)
+      let currentRank = 1;
+      arr.forEach((p, idx) => {
+        if (idx > 0 && p.score < arr[idx - 1].score) currentRank = idx + 1;
+        p.rank = currentRank;
+      });
+      return arr;
+    }
+
+    function computeTeamStandings(rankedPlayers) {
+      const map = {};
+      (appConfig.teams || []).forEach(t => {
+        map[t.id] = { id: t.id, name: t.name, color: t.color, total: 0, count: 0, avg: 0 };
+      });
+      rankedPlayers.forEach(p => {
+        const tid = map[p.team] ? p.team : (appConfig.teams[0] ? appConfig.teams[0].id : 't1');
+        if (map[tid]) {
+          map[tid].total += p.score;
+          map[tid].count += 1;
+        }
+      });
+      const list = Object.values(map).filter(t => t.count > 0).map(t => {
+        t.avg = Math.round(t.total / t.count);
+        return t;
+      }).sort((a, b) => b.avg - a.avg || b.total - a.total);
+
+      let r = 1;
+      list.forEach((t, i) => {
+        if (i > 0 && t.avg < list[i - 1].avg) r = i + 1;
+        t.rank = r;
+      });
+      return list;
+    }
+
+    function revealAnswer() {
+      if (gameState.status !== 'question' || gameState.isRevealed) return;
+      const fullEv = getActiveFullQuestion();
+      if (!fullEv) return showToast("⚠️ Question introuvable dans la bibliothèque.");
+
+      const updates = {};
+      const updatedShadow = JSON.parse(JSON.stringify(playersData));
+      let votedCount = 0, successCount = 0;
+      let estimateSum = 0, estimateCount = 0, closestPlayer = null, closestDiff = Infinity;
+      const hotspotPins = [];
+      const optionCounts = [0, 0, 0, 0];
+
+      Object.keys(updatedShadow).forEach(uid => {
+        const p = updatedShadow[uid];
+        if (p.vote !== -1 && p.vote !== undefined) {
+          votedCount++;
+          if ((fullEv.type === 'qcm' || fullEv.type === 'tf' || fullEv.type === 'poll') && p.vote >= 0 && p.vote <= 3) {
+            optionCounts[p.vote]++;
+          } else if (fullEv.type === 'multi' && Array.isArray(p.voteMulti)) {
+            p.voteMulti.forEach(idx => { if (idx >= 0 && idx <= 3) optionCounts[idx]++; });
+          } else if (fullEv.type === 'estimate' && p.voteNum !== undefined) {
+            const num = Number(p.voteNum);
+            if (!isNaN(num)) {
+              estimateSum += num;
+              estimateCount++;
+              const d = Math.abs(num - fullEv.targetVal);
+              if (d < closestDiff) { closestDiff = d; closestPlayer = { name: p.name, val: num }; }
+            }
+          }
+        }
+
+        const res = evaluatePlayerAnswer(p, fullEv);
+        if (fullEv.type === 'hotspot' && p.votePt && typeof p.votePt.x === 'number') {
+          hotspotPins.push({ x: p.votePt.x, y: p.votePt.y, ok: res.ratio > 0, name: p.name });
+        }
+
+        let delta = 0;
+        let newStreak = p.streak || 0;
+
+        if (res.status === 'poll') {
+          delta = 0;
+        } else if (res.ratio > 0) {
+          successCount++;
+          newStreak += 1;
+          let base = 100 * res.ratio;
+          if (gameState.scoringMode === 'speed') {
+            let timeRatio = 1;
+            if (gameState.timerDuration > 0 && p.votedAt && gameState.startedAt) {
+              const elapsed = Math.max(0, p.votedAt - gameState.startedAt);
+              timeRatio = Math.max(0, Math.min(1, 1 - elapsed / (gameState.timerDuration * 1000)));
+            }
+            base = (500 + 500 * timeRatio) * res.ratio;
+          } else if (gameState.scoringMode === 'bet') {
+            const b = p.betLevel || 'safe';
+            const stake = b === 'expert' ? 300 : (b === 'conf' ? 200 : 100);
+            base = stake * res.ratio;
+          }
+          let mult = 1;
+          if (gameState.doublePoints) mult *= 2;
+          if (p.personalDouble) mult *= 2;
+          const streakBonus = newStreak >= 2 ? Math.min(100, (newStreak - 1) * 20) : 0;
+          delta = Math.round(base * mult) + streakBonus;
+        } else {
+          newStreak = 0;
+          if (gameState.scoringMode === 'bet' && p.vote !== -1 && p.vote !== undefined) {
+            const b = p.betLevel || 'safe';
+            delta = b === 'expert' ? -150 : (b === 'conf' ? -50 : 0);
+            if (p.personalDouble) delta *= 2;
+          }
+        }
+
+        const newScore = Math.max(0, (p.score || 0) + delta);
+        p.score = newScore;
+        p.streak = newStreak;
+
+        updates[uid + '/score'] = newScore;
+        updates[uid + '/streak'] = newStreak;
+        updates[uid + '/lastDelta'] = delta;
+        updates[uid + '/lastCorrect'] = res.status;
+      });
+
+      if (Object.keys(updates).length > 0) db.ref('players').update(updates);
+
+      const ranked = computeRankedList(updatedShadow);
+      const teamsRanked = computeTeamStandings(ranked);
+      const successPct = votedCount > 0 ? Math.round((successCount / votedCount) * 100) : 0;
+
+      const historyEntry = {
+        qIndex: gameState.qIndex + 1,
+        q: fullEv.q,
+        type: fullEv.type,
+        votedCount,
+        successCount,
+        successPct
+      };
+      const newHistory = (gameState.historyStats || []).filter(h => h.qIndex !== historyEntry.qIndex);
+      newHistory.push(historyEntry);
+
+      gameState.isRevealed = true;
+      gameState.showMidBoard = false;
+      gameState.leaderboard = ranked.slice(0, 30);
+      gameState.teamLeaderboard = teamsRanked;
+      gameState.historyStats = newHistory;
+      gameState.revealData = {
+        correct: fullEv.correct,
+        correctMulti: fullEv.correctMulti || [fullEv.correct],
+        targetVal: fullEv.targetVal,
+        tolerance: fullEv.tolerance,
+        hotspot: fullEv.hotspot,
+        anecdote: fullEv.anecdote || '',
+        aImg: fullEv.aImg || '',
+        optionCounts,
+        votedCount,
+        successPct,
+        estimateAvg: estimateCount > 0 ? Math.round(estimateSum / estimateCount) : null,
+        closestPlayer,
+        hotspotPins
+      };
+      pushState();
+    }
+
+    function toggleMidLeaderboard() {
+      if (gameState.status !== 'question' || !gameState.isRevealed) return;
+      gameState.showMidBoard = !gameState.showMidBoard;
+      gameState.leaderboard = computeRankedList(playersData).slice(0, 30);
+      gameState.teamLeaderboard = computeTeamStandings(gameState.leaderboard);
+      pushState();
+    }
+
+    function nextQuestion() {
+      const quiz = getFullDB()[gameState.quizId];
+      const total = quiz && quiz.events ? quiz.events.length : gameState.totalQuestions;
+
+      if (gameState.qIndex + 1 < total && quiz && quiz.events[gameState.qIndex + 1]) {
+        const updates = {};
+        Object.keys(playersData).forEach(uid => {
+          updates[uid + '/vote'] = -1;
+          updates[uid + '/voteMulti'] = null;
+          updates[uid + '/voteNum'] = null;
+          updates[uid + '/votePt'] = null;
+          updates[uid + '/votedAt'] = null;
+          updates[uid + '/elimOpts'] = null;
+          updates[uid + '/req5050'] = null;
+          updates[uid + '/personalDouble'] = false;
+          updates[uid + '/lastDelta'] = 0;
+          updates[uid + '/lastCorrect'] = null;
+        });
+        if (Object.keys(updates).length > 0) db.ref('players').update(updates);
+
+        const nextIdx = gameState.qIndex + 1;
+        const nextEv = normalizeQuestion(quiz.events[nextIdx]);
+        const startTs = nowServer();
+
+        gameState.qIndex = nextIdx;
+        gameState.isRevealed = false;
+        gameState.isClueOpen = false;
+        gameState.doublePoints = false;
+        gameState.showMidBoard = false;
+        gameState.startedAt = startTs;
+        gameState.timerEndAt = gameState.timerDuration > 0 ? startTs + gameState.timerDuration * 1000 : 0;
+        gameState.currentQ = buildPublicQuestionPayload(nextEv, false);
+        gameState.revealData = null;
+        pushState();
+      } else {
+        const finalRanked = computeRankedList(playersData);
+        gameState.status = 'leaderboard';
+        gameState.leaderboard = finalRanked;
+        gameState.teamLeaderboard = computeTeamStandings(finalRanked);
+        pushState();
+        saveGlobalScoresAtomically(finalRanked);
+      }
+    }
+
+    // Sauvegarde atomique avec verrou transactionnel (aucun doublon même si PC + Télécommande GM ouverts)
+    function saveGlobalScoresAtomically(finalRanked) {
+      const quizId = gameState.quizId || 'week-44';
+      const quizLabel = gameState.quizLabel || 'Quiz Auto B2B';
+
+      db.ref('state/scoresSaved').transaction(current => {
+        if (current === true) return; // Déjà sauvegardé par un autre écran GM
+        return true;
+      }, (err, committed) => {
+        if (err || !committed) return;
+        (finalRanked || []).forEach(p => {
+          const pts = p.score || 0;
+          if (pts > 0 && p.uid) {
+            db.ref('accounts/' + p.uid).transaction(acc => {
+              if (!acc) return acc;
+              acc.globalScore = (acc.globalScore || 0) + pts;
+              acc.quizScores = acc.quizScores || {};
+              const prevBest = acc.quizScores[quizId] ? (acc.quizScores[quizId].score || 0) : 0;
+              acc.quizScores[quizId] = { score: Math.max(prevBest, pts), label: quizLabel };
+              return acc;
+            });
+          }
+        });
+      });
+    }
+
+    // =========================================================================
+    // 14. ACTIONS DU JOUEUR (VOTES, JOKERS, ÉQUIPES, ÉMOJIS)
+    // =========================================================================
+    function renderTeamSelectorForPlayer() {
+      const wrap = document.getElementById('player-team-picker-wrap');
+      const sel = document.getElementById('player-team-select');
+      if (!wrap || !sel) return;
+      if (gameState.teamMode !== 'teams') {
+        wrap.style.display = 'none';
+        return;
+      }
+      wrap.style.display = 'block';
+      sel.innerHTML = (appConfig.teams || []).map(t =>
+        `<option value="${escapeHtml(t.id)}" ${myPlayer.team === t.id ? 'selected' : ''}>${escapeHtml(t.name)}</option>`
+      ).join('');
+    }
+
+    window.playerSelectTeam = function(teamId) {
+      if (myRole !== 'joueur' || !myUid) return;
+      db.ref('players/' + myUid).update({ team: teamId });
+      showToast("Équipe mise à jour !");
+    };
+
+    window.playerSetBet = function(level) {
+      if (myRole !== 'joueur' || gameState.isRevealed || isQuestionTimeUp()) return;
+      localBetChoice = level;
+      db.ref('players/' + myUid).update({ betLevel: level });
+      updatePlayerInteractiveState();
+    };
+
+    window.playerUse5050 = function() {
+      if (myRole !== 'joueur' || !gameState.jokersEnabled || myPlayer.used5050 || gameState.isRevealed) return;
+      db.ref('players/' + myUid).update({ req5050: gameState.qIndex });
+      showToast("🎯 Joker 50/50 activé !");
+    };
+
+    window.playerUseDouble = function() {
+      if (myRole !== 'joueur' || !gameState.jokersEnabled || myPlayer.usedDouble || gameState.isRevealed) return;
+      db.ref('players/' + myUid).update({ usedDouble: true, personalDouble: true });
+      showToast("⚡ Quitte ou Double (x2) activé sur cette question !");
+    };
+
+    window.playerVote = function(optIndex) {
+      if (myRole !== 'joueur' || gameState.isRevealed || isQuestionTimeUp()) return;
+      db.ref('players/' + myUid).update({
+        vote: optIndex,
+        betLevel: localBetChoice,
+        votedAt: nowServer()
+      });
+    };
+
+    window.playerToggleMulti = function(optIndex) {
+      if (myRole !== 'joueur' || gameState.isRevealed || isQuestionTimeUp()) return;
+      const pos = localMultiSelection.indexOf(optIndex);
+      if (pos >= 0) localMultiSelection.splice(pos, 1);
+      else localMultiSelection.push(optIndex);
+      updatePlayerInteractiveState();
+    };
+
+    window.playerSubmitMulti = function() {
+      if (myRole !== 'joueur' || gameState.isRevealed || isQuestionTimeUp()) return;
+      if (localMultiSelection.length === 0) return showToast("Sélectionnez au moins une réponse.");
+      db.ref('players/' + myUid).update({
+        vote: 1,
+        voteMulti: localMultiSelection.slice().sort(),
+        betLevel: localBetChoice,
+        votedAt: nowServer()
+      });
+      showToast("✅ Sélection validée !");
+    };
+
+    window.playerSubmitEstimate = function() {
+      if (myRole !== 'joueur' || gameState.isRevealed || isQuestionTimeUp()) return;
+      const inp = document.getElementById('player-estimate-num');
+      if (!inp) return;
+      const val = Number(inp.value);
+      db.ref('players/' + myUid).update({
+        vote: 1,
+        voteNum: val,
+        betLevel: localBetChoice,
+        votedAt: nowServer()
+      });
+      showToast(`✅ Estimation enregistrée : ${val} ${(gameState.currentQ && gameState.currentQ.unit) || '€'}`);
+    };
+
+    window.playerClickHotspot = function(event) {
+      if (myRole !== 'joueur' || gameState.isRevealed || isQuestionTimeUp()) return;
+      const stage = event.currentTarget;
+      const rect = stage.getBoundingClientRect();
+      const x = Math.max(0, Math.min(100, Math.round(((event.clientX - rect.left) / rect.width) * 1000) / 10));
+      const y = Math.max(0, Math.min(100, Math.round(((event.clientY - rect.top) / rect.height) * 1000) / 10));
+      db.ref('players/' + myUid).update({
+        vote: 1,
+        votePt: { x, y },
+        betLevel: localBetChoice,
+        votedAt: nowServer()
+      });
+    };
+
+    window.sendReaction = function(emoji) {
+      if (!db) return;
+      const now = Date.now();
+      if (now - lastReactionSentAt < 1100) return; // Anti-spam 1.1s
+      lastReactionSentAt = now;
+      db.ref('reactions').push({ emoji, ts: nowServer() });
+      spawnFloatingEmoji(emoji);
+    };
+
+    function spawnFloatingEmoji(emoji) {
+      const layer = document.getElementById('floating-reactions-layer');
+      if (!layer) return;
+      const el = document.createElement('div');
+      el.className = 'floating-emoji';
+      el.innerText = emoji;
+      el.style.left = (12 + Math.random() * 76) + '%';
+      layer.appendChild(el);
+      setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 3300);
+    }
+
+    // =========================================================================
+    // 15. RENDU VISUEL JOUEUR (SANS DESTRUCTION DOM PENDANT LE VOTE)
+    // =========================================================================
+    function renderUIs(force = false) {
+      if (myRole === 'joueur') renderPlayerView(force);
+      else if (myRole === 'maitre') {
+        renderGMPresView(force);
+        if (currentGMTab === 'remote') renderGMRemoteView();
+      }
+    }
+
+    function renderPlayerView(force = false) {
+      renderTeamSelectorForPlayer();
+      const modeMap = { speed: '⚡ Show TV Rapidité', precision: '🎯 Précision', bet: '🎲 Pari de Confiance' };
+      document.getElementById('player-mode-badge').innerText = modeMap[gameState.scoringMode] || 'Quiz Live';
+
+      const sig = JSON.stringify({
+        st: gameState.status,
+        qi: gameState.qIndex,
+        rev: gameState.isRevealed,
+        mid: gameState.showMidBoard,
+        clue: gameState.isClueOpen,
+        dbl: gameState.doublePoints,
+        scMode: gameState.scoringMode,
+        jk: gameState.jokersEnabled
+      });
+
+      const container = document.getElementById('player-dynamic-content');
+      if (!force && sig === lastPlayerRenderSignature) {
+        updatePlayerInteractiveState();
+        return;
+      }
+      lastPlayerRenderSignature = sig;
+
+      if (gameState.status === 'lobby') {
+        window.myEndGif = null;
+        container.innerHTML = `
+          <div style="text-align:center; padding:25px 10px;">
+            <h2 style="color:var(--gold-trophy); font-size:2.2rem; margin-bottom:10px;">Salle d'attente</h2>
+            <p style="font-size:1.1rem; color:var(--text-muted); margin-bottom:16px;">Vous êtes prêt ! Regardez l'écran principal, l'animateur va lancer la partie.</p>
+            <p style="font-size:0.9rem; color:var(--accent-green);">Envoyez une réaction ci-dessous pour tester l'écran géant 👇</p>
+          </div>`;
+        return;
+      }
+
+      if (gameState.status === 'question' && gameState.showMidBoard) {
+        const myEntry = (gameState.leaderboard || []).find(p => p.uid === myUid);
+        container.innerHTML = `
+          <div style="text-align:center; padding:20px;">
+            <h2 style="color:var(--gold-trophy); margin-bottom:10px;">🏆 Point Classement Mi-Temps</h2>
+            <p style="font-size:1.3rem;">Votre position provisoire : <strong style="color:var(--gold-trophy);">${myEntry ? (myEntry.rank === 1 ? '1er 🥇' : myEntry.rank + 'e') : '-'}</strong> (${myPlayer.score || 0} pts)</p>
+          </div>`;
+        return;
+      }
+
+      if (gameState.status === 'question' && gameState.currentQ) {
+        window.myEndGif = null;
+        const q = gameState.currentQ;
+        const qType = q.type || 'qcm';
+        const rev = gameState.revealData || {};
+        let html = '';
+
+        if (gameState.doublePoints) {
+          html += `<div style="text-align:center;"><span class="double-banner">⚡ MANCHE POINTS DOUBLES (x2) ⚡</span></div>`;
+        }
+        html += `<div style="text-align:center; color:var(--text-muted); font-size:0.92rem; margin-bottom:6px;">Question ${gameState.qIndex + 1} / ${gameState.totalQuestions || '?'}</div>`;
+        html += `<h3 style="text-align:center; font-size:1.15rem; margin-bottom:14px; line-height:1.35;">${escapeHtml(q.q)}</h3>`;
+
+        if (gameState.isClueOpen && (q.clue || q.cImg)) {
+          html += `<div style="background:rgba(245,158,11,0.18); border:1px solid var(--accent-amber); color:#fde68a; padding:10px 14px; border-radius:10px; margin-bottom:12px; text-align:center; font-size:0.92rem;">
+            🔍 <strong>Indice :</strong> ${escapeHtml(q.clue)}
+          </div>`;
+        }
+
+        // Barre de Pari de Confiance
+        if (!gameState.isRevealed && gameState.scoringMode === 'bet' && qType !== 'poll') {
+          html += `<div class="bet-bar">
+            <button type="button" id="bet-safe" class="bet-btn" onclick="playerSetBet('safe')">🛡️ Prudent<br><span style="color:var(--accent-green);">+100 / 0</span></button>
+            <button type="button" id="bet-conf" class="bet-btn" onclick="playerSetBet('conf')">⚡ Confiant<br><span style="color:var(--gold-trophy);">+200 / -50</span></button>
+            <button type="button" id="bet-expert" class="bet-btn" onclick="playerSetBet('expert')">🔥 Expert<br><span style="color:#f87171;">+300 / -150</span></button>
+          </div>`;
+        }
+
+        // Barre de Jokers
+        if (!gameState.isRevealed && gameState.jokersEnabled && qType !== 'poll') {
+          html += `<div class="joker-bar">
+            ${qType === 'qcm' ? `<button type="button" id="btn-joker-5050" class="btn btn-dark" style="padding:7px 12px; font-size:0.84rem;" onclick="playerUse5050()">🎯 Joker 50/50</button>` : ''}
+            <button type="button" id="btn-joker-double" class="btn btn-dark" style="padding:7px 12px; font-size:0.84rem;" onclick="playerUseDouble()">⚡ Quitte ou Double (x2)</button>
+          </div>`;
+        }
+
+        // Rendu selon le format de question
+        if (qType === 'qcm' || qType === 'poll') {
+          const letters = ['A', 'B', 'C', 'D'];
+          html += `<div class="vote-grid">`;
+          q.opts.forEach((txt, i) => {
+            if (!txt && !(q.optImgs && q.optImgs[i])) return;
+            let revCls = '';
+            if (gameState.isRevealed && qType === 'qcm') {
+              revCls = (i === rev.correct) ? ' revealed-correct' : ' revealed-wrong';
+            }
+            const imgH = (q.optImgs && q.optImgs[i]) ? `<img src="${q.optImgs[i]}" style="max-height:75px; border-radius:6px;">` : '';
+            html += `<button type="button" id="p-opt-${i}" class="btn-vote${revCls}" ${gameState.isRevealed ? 'disabled' : ''} onclick="playerVote(${i})">
+              ${imgH}
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:1.5rem; color:var(--gold-trophy);">${letters[i]}</span>
+                <span>${escapeHtml(txt)}</span>
+              </div>
+            </button>`;
+          });
+          html += `</div>`;
+        }
+        else if (qType === 'tf') {
+          const tfLabels = ['✅ VRAI', '❌ FAUX'];
+          html += `<div class="vote-grid">`;
+          [0, 1].forEach(i => {
+            let revCls = '';
+            if (gameState.isRevealed) revCls = (i === rev.correct) ? ' revealed-correct' : ' revealed-wrong';
+            html += `<button type="button" id="p-opt-${i}" class="btn-vote${revCls}" style="min-height:110px; font-size:1.4rem;" ${gameState.isRevealed ? 'disabled' : ''} onclick="playerVote(${i})">${tfLabels[i]}</button>`;
+          });
+          html += `</div>`;
+        }
+        else if (qType === 'multi') {
+          const letters = ['A', 'B', 'C', 'D'];
+          const corrArr = Array.isArray(rev.correctMulti) ? rev.correctMulti : [];
+          html += `<p style="text-align:center; font-size:0.85rem; color:var(--accent-blue); margin-bottom:8px;">Plusieurs réponses possibles — cochez puis validez</p>`;
+          html += `<div class="vote-grid">`;
+          q.opts.forEach((txt, i) => {
+            let revCls = '';
+            if (gameState.isRevealed) revCls = corrArr.includes(i) ? ' revealed-correct' : ' revealed-wrong';
+            html += `<button type="button" id="p-multi-${i}" class="btn-vote${revCls}" ${gameState.isRevealed ? 'disabled' : ''} onclick="playerToggleMulti(${i})">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:1.4rem; color:var(--gold-trophy);">${letters[i]}</span>
+                <span>${escapeHtml(txt)}</span>
+              </div>
+            </button>`;
+          });
+          html += `</div>`;
+          if (!gameState.isRevealed) {
+            html += `<button type="button" id="btn-submit-multi" class="btn btn-green" style="width:100%; margin-top:12px; padding:14px; font-size:1.05rem;" onclick="playerSubmitMulti()">✔️ Valider ma sélection</button>`;
+          }
+        }
+        else if (qType === 'estimate') {
+          const mid = myPlayer.voteNum !== undefined ? myPlayer.voteNum : Math.round((q.min + q.max) / 2);
+          html += `<div style="background:#141821; padding:20px; border-radius:12px; border:1px solid var(--border-metallic); text-align:center;">
+            <div style="font-size:2rem; font-weight:900; color:var(--gold-trophy); margin-bottom:10px;">
+              <span id="player-est-display">${mid}</span> ${escapeHtml(q.unit || '€')}
+            </div>
+            <input type="range" id="player-estimate-range" min="${q.min}" max="${q.max}" step="${q.step}" value="${mid}" ${gameState.isRevealed ? 'disabled' : ''} oninput="document.getElementById('player-estimate-num').value=this.value; document.getElementById('player-est-display').innerText=this.value;" style="margin-bottom:14px;">
+            <div style="display:flex; gap:10px; align-items:center; justify-content:center; margin-bottom:14px;">
+              <input type="number" id="player-estimate-num" min="${q.min}" max="${q.max}" step="${q.step}" value="${mid}" ${gameState.isRevealed ? 'disabled' : ''} oninput="document.getElementById('player-estimate-range').value=this.value; document.getElementById('player-est-display').innerText=this.value;" style="max-width:160px; text-align:center; font-weight:bold; font-size:1.15rem;">
+              <span style="color:var(--text-muted); font-weight:bold;">${escapeHtml(q.unit || '€')}</span>
+            </div>
+            ${!gameState.isRevealed ? `<button type="button" id="btn-submit-est" class="btn btn-green" style="width:100%; padding:14px;" onclick="playerSubmitEstimate()">🎯 Valider mon estimation</button>` : `<div style="color:var(--accent-green); font-weight:bold; font-size:1.1rem;">Valeur cible : ${rev.targetVal} ${escapeHtml(q.unit || '€')} (± ${rev.tolerance} ${escapeHtml(q.unit || '€')})</div>`}
+          </div>`;
+        }
+        else if (qType === 'hotspot') {
+          html += `<div style="text-align:center;">
+            <p style="font-size:0.88rem; color:var(--gold-trophy); margin-bottom:8px;">👆 Touchez directement la zone d'anomalie sur la photo :</p>
+            <div class="hotspot-stage" id="player-hotspot-stage" onclick="playerClickHotspot(event)" style="cursor:crosshair;">
+              <img src="${q.qImg || ''}" alt="Inspection VO">
+              <div id="player-hotspot-pin" class="hotspot-pin" style="display:none; background:var(--gold-trophy);"></div>
+              ${gameState.isRevealed && rev.hotspot ? `<div class="hotspot-target-rect" style="left:${rev.hotspot.x - rev.hotspot.w/2}%; top:${rev.hotspot.y - rev.hotspot.h/2}%; width:${rev.hotspot.w}%; height:${rev.hotspot.h}%;"></div>` : ''}
+            </div>
+          </div>`;
+        }
+
+        html += `<div id="player-feedback-banner" style="margin-top:16px; text-align:center;"></div>`;
+        container.innerHTML = html;
+        updatePlayerInteractiveState();
+        return;
+      }
+
+      if (gameState.status === 'leaderboard') {
+        const myEntry = (gameState.leaderboard || []).find(p => p.uid === myUid);
+        const myRank = myEntry ? myEntry.rank : 0;
+
+        if (!window.myEndGif) {
+          const cat = myRank === 1 ? 'rank1' : (myRank === 2 ? 'rank2' : (myRank === 3 ? 'rank3' : 'other'));
+          const arr = END_GIFS[cat];
+          window.myEndGif = arr[Math.floor(Math.random() * arr.length)];
+        }
+
+        container.innerHTML = `<div style="text-align:center;">
+          <h2 style="color:var(--gold-trophy); font-size:2.2rem; margin-bottom:8px;">🏁 Fin du Quiz !</h2>
+          <p style="font-size:1.2rem; margin-bottom:14px;">Classement : <strong style="color:var(--gold-trophy);">${myRank > 0 ? (myRank === 1 ? '1er 🥇' : myRank + 'e') : '-'}</strong> avec <strong>${myPlayer.score || 0} pts</strong></p>
+          <img src="${window.myEndGif}" style="max-width:100%; height:190px; object-fit:cover; border-radius:12px; margin-bottom:16px; box-shadow:0 5px 15px rgba(0,0,0,0.5);">
+          <p style="color:var(--accent-green); font-weight:bold;">Vos points ont été crédités sur votre palmarès carrière !</p>
+        </div>`;
+      }
+    }
+
+    // Mise à jour légère de l'état interactif du joueur sans recréer les boutons
+    function updatePlayerInteractiveState() {
+      if (myRole !== 'joueur' || gameState.status !== 'question' || !gameState.currentQ) return;
+      const q = gameState.currentQ;
+      const qType = q.type || 'qcm';
+      const timeUp = isQuestionTimeUp();
+
+      // Pari de confiance
+      const activeBet = myPlayer.betLevel || localBetChoice || 'safe';
+      ['safe', 'conf', 'expert'].forEach(b => {
+        const el = document.getElementById('bet-' + b);
+        if (el) {
+          el.classList.toggle('active', activeBet === b);
+          el.disabled = timeUp || gameState.isRevealed;
+        }
+      });
+
+      // Jokers
+      const b50 = document.getElementById('btn-joker-5050');
+      if (b50) {
+        b50.disabled = !!myPlayer.used5050 || timeUp || gameState.isRevealed;
+        b50.innerText = myPlayer.used5050 ? '🎯 50/50 utilisé' : '🎯 Joker 50/50';
+      }
+      const bDbl = document.getElementById('btn-joker-double');
+      if (bDbl) {
+        bDbl.disabled = !!myPlayer.usedDouble || timeUp || gameState.isRevealed;
+        bDbl.innerText = myPlayer.personalDouble ? '⚡ x2 ACTIF !' : (myPlayer.usedDouble ? '⚡ x2 utilisé' : '⚡ Quitte ou Double (x2)');
+        if (myPlayer.personalDouble) bDbl.style.borderColor = 'var(--gold-trophy)';
+      }
+
+      // Options QCM / TF / Poll + élimination 50/50
+      const elim = Array.isArray(myPlayer.elimOpts) ? myPlayer.elimOpts : [];
+      if (qType === 'qcm' || qType === 'tf' || qType === 'poll') {
+        [0, 1, 2, 3].forEach(i => {
+          const btn = document.getElementById('p-opt-' + i);
+          if (!btn) return;
+          btn.classList.toggle('vote-selected', myPlayer.vote === i);
+          btn.classList.toggle('elim-5050', !gameState.isRevealed && elim.includes(i));
+          if (!gameState.isRevealed) btn.disabled = timeUp || elim.includes(i);
+        });
+      }
+
+      if (qType === 'multi') {
+        const sel = (myPlayer.vote === 1 && Array.isArray(myPlayer.voteMulti) && localMultiSelection.length === 0) ? myPlayer.voteMulti : localMultiSelection;
+        [0, 1, 2, 3].forEach(i => {
+          const btn = document.getElementById('p-multi-' + i);
+          if (!btn) return;
+          btn.classList.toggle('vote-selected', sel.includes(i));
+          if (!gameState.isRevealed) btn.disabled = timeUp;
+        });
+        const sub = document.getElementById('btn-submit-multi');
+        if (sub) sub.disabled = timeUp;
+      }
+
+      if (qType === 'estimate') {
+        const sub = document.getElementById('btn-submit-est');
+        if (sub) sub.disabled = timeUp;
+      }
+
+      if (qType === 'hotspot') {
+        const pin = document.getElementById('player-hotspot-pin');
+        if (pin && myPlayer.votePt && typeof myPlayer.votePt.x === 'number') {
+          pin.style.display = 'block';
+          pin.style.left = myPlayer.votePt.x + '%';
+          pin.style.top = myPlayer.votePt.y + '%';
+        }
+      }
+
+      const fb = document.getElementById('player-feedback-banner');
+      if (fb) {
+        if (gameState.isRevealed) {
+          const st = myPlayer.lastCorrect;
+          const delta = myPlayer.lastDelta || 0;
+          const sign = delta >= 0 ? `+${delta}` : `${delta}`;
+          if (st === 'poll') fb.innerHTML = `<div style="color:var(--accent-blue); font-weight:bold; font-size:1.2rem;">📊 Sondage enregistré — découvrez les résultats à l'écran !</div>`;
+          else if (st === 'correct') fb.innerHTML = `<div style="color:var(--accent-green); font-weight:bold; font-size:1.35rem;">✅ EXCELLENT ! (${sign} pts)</div>`;
+          else if (st === 'partial') fb.innerHTML = `<div style="color:var(--gold-trophy); font-weight:bold; font-size:1.3rem;">🎯 BIEN APPROCHÉ ! (${sign} pts)</div>`;
+          else fb.innerHTML = `<div style="color:#f87171; font-weight:bold; font-size:1.3rem;">❌ RATÉ (${sign} pts)</div>`;
+        } else if (timeUp) {
+          fb.innerHTML = `<div style="color:var(--accent-amber); font-weight:bold;">⏱️ Temps écoulé ! Regardez l'écran principal.</div>`;
+        } else if (myPlayer.vote !== -1 && myPlayer.vote !== undefined) {
+          fb.innerHTML = `<div style="color:var(--accent-green); font-size:0.95rem;">✔️ Réponse enregistrée (modifiable tant que le chrono tourne)</div>`;
+        } else {
+          fb.innerHTML = '';
+        }
+      }
+    }
+
+    // =========================================================================
+    // 16. RENDU PLATEAU TV & TÉLÉCOMMANDE MOBILE GM
+    // =========================================================================
+    function renderLeaderboardBlockHtml(playersArr, teamsArr, isCeremony) {
+      let html = `<div class="${isCeremony ? 'podium-ceremony' : ''}" style="max-width:860px; margin:0 auto;">`;
+
+      if (gameState.teamMode === 'teams' && teamsArr && teamsArr.length > 0) {
+        html += `<h3 style="color:var(--accent-blue); text-align:center; margin-bottom:12px; text-transform:uppercase;">🛡️ Classement des Équipes (Moyenne / joueur)</h3>`;
+        html += `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin-bottom:28px;">`;
+        teamsArr.forEach(t => {
+          const medal = t.rank === 1 ? '🥇' : (t.rank === 2 ? '🥈' : (t.rank === 3 ? '🥉' : `#${t.rank}`));
+          html += `<div style="background:#141822; border:2px solid ${t.color}; border-radius:12px; padding:14px; text-align:center;">
+            <div style="font-size:1.15rem; font-weight:bold; margin-bottom:4px;">${medal} ${escapeHtml(t.name)}</div>
+            <div style="font-size:1.5rem; font-weight:900; color:var(--gold-trophy);">${t.avg} pts <span style="font-size:0.8rem; color:var(--text-muted);">/ joueur</span></div>
+            <div style="font-size:0.8rem; color:var(--text-muted);">${t.count} participant(s) • Total ${t.total} pts</div>
+          </div>`;
+        });
+        html += `</div>`;
+      }
+
+      html += `<h3 style="color:var(--gold-trophy); text-align:center; margin-bottom:14px; text-transform:uppercase;">🏅 Top Individuel</h3>`;
+      if (!playersArr || playersArr.length === 0) {
+        html += `<p style="text-align:center; color:var(--text-muted);">Aucun score pour le moment.</p>`;
+      } else {
+        playersArr.slice(0, 8).forEach(p => {
+          const rClass = p.rank === 1 ? 'rank-1' : (p.rank === 2 ? 'rank-2' : (p.rank === 3 ? 'rank-3' : 'rank-other'));
+          const medal = p.rank === 1 ? '🥇' : (p.rank === 2 ? '🥈' : (p.rank === 3 ? '🥉' : `${p.rank}.`));
+          const gScore = (globalAccounts[p.uid] && globalAccounts[p.uid].globalScore) ? globalAccounts[p.uid].globalScore : p.score;
+          const streakTag = (p.streak || 0) >= 2 ? ` <span style="font-size:0.95rem;">🔥x${p.streak}</span>` : '';
+          html += `<div class="lb-item ${rClass}">
+            <span>${medal} ${escapeHtml(p.name)}${streakTag}</span>
+            <span style="color:var(--gold-trophy);">${p.score || 0} pts <span style="font-size:0.88rem; color:var(--text-muted); font-weight:normal;">(Carrière: ${gScore})</span></span>
+          </div>`;
+        });
+      }
+      html += `</div>`;
+      return html;
+    }
+
+    function renderGMPresView(force = false) {
+      if (myRole !== 'maitre') return;
+      updateGMSidebarAndLiveCounters();
+
+      const sig = JSON.stringify({
+        st: gameState.status,
+        qi: gameState.qIndex,
+        rev: gameState.isRevealed,
+        mid: gameState.showMidBoard,
+        clue: gameState.isClueOpen,
+        dbl: gameState.doublePoints,
+        url: getEffectiveJoinUrl(),
+        pCount: gameState.status === 'lobby' ? Object.keys(playersData).length : 0
+      });
+
+      const container = document.getElementById('gm-pres-dynamic-content');
+      if (!container) return;
+      if (!force && sig === lastGMRenderSignature) return;
+      lastGMRenderSignature = sig;
+
+      // 1. LOBBY INTERACTIF AVEC QR CODE
+      if (gameState.status === 'lobby') {
+        const joinUrl = getEffectiveJoinUrl();
+        const encodedUrl = encodeURIComponent(joinUrl);
+        const pArr = Object.values(playersData);
+        const pills = pArr.length === 0
+          ? `<span style="color:var(--text-muted);">En attente des premiers joueurs...</span>`
+          : pArr.map(p => `<span style="background:#232938; border:1px solid var(--gold-trophy); padding:7px 14px; border-radius:99px; font-weight:bold; display:inline-flex; align-items:center; gap:6px;">${p.online !== false ? '🟢' : '⚪'} ${escapeHtml(p.name)}</span>`).join(' ');
+
+        container.innerHTML = `
+          <div style="display:flex; flex-wrap:wrap; gap:30px; align-items:center; justify-content:center; padding:15px 0;">
+            <div style="background:#fff; padding:16px; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.5); text-align:center;">
+              <img src="https://api.qrserver.com/v1/create-qr-code/?size=230x230&margin=6&data=${encodedUrl}"
+                   onerror="this.onerror=null; this.src='https://quickchart.io/qr?size=230&text=${encodedUrl}';"
+                   alt="QR Code" style="width:220px; height:220px; display:block;">
+              <div style="color:#111; font-weight:900; margin-top:8px; font-size:0.9rem;">SCANNEZ POUR JOUER</div>
+            </div>
+            <div style="flex:1; min-width:280px; max-width:620px; text-align:left;">
+              <div style="color:var(--gold-trophy); font-weight:900; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">Rejoignez le Salon en Direct</div>
+              <h2 style="font-size:2.1rem; margin-bottom:12px;">À vos smartphones !</h2>
+              <div style="background:#11141c; border:1px solid var(--border-metallic); padding:12px 16px; border-radius:10px; font-family:monospace; font-size:1.05rem; color:var(--accent-blue); margin-bottom:18px; word-break:break-all; cursor:pointer;" onclick="safeCopyText('${escapeHtml(joinUrl)}', '🔗 Lien copié !')">
+                🔗 ${escapeHtml(joinUrl)}
+              </div>
+              <div style="margin-bottom:8px; color:var(--text-muted); font-size:0.9rem; font-weight:bold;">Joueurs prêts dans le salon (${pArr.length}) :</div>
+              <div style="display:flex; flex-wrap:wrap; gap:8px;">${pills}</div>
+            </div>
+          </div>`;
+        return;
+      }
+
+      // 2. CLASSEMENT MI-TEMPS
+      if (gameState.status === 'question' && gameState.showMidBoard) {
+        let html = `<h2 style="color:var(--gold-trophy); font-size:2.4rem; text-align:center; margin-bottom:24px;">🏆 Classement Provisoire (Question ${gameState.qIndex + 1}/${gameState.totalQuestions})</h2>`;
+        html += renderLeaderboardBlockHtml(gameState.leaderboard, gameState.teamLeaderboard, false);
+        html += `<div class="btn-tv-hide" style="display:flex; gap:10px; margin-top:24px;">
+          <button class="btn btn-dark" style="flex:1; padding:16px;" onclick="toggleMidLeaderboard()">↩️ Revenir à l'explication</button>
+          <button class="btn btn-green" style="flex:2; padding:16px; font-size:1.2rem;" onclick="nextQuestion()">➡️ ${gameState.qIndex + 1 < gameState.totalQuestions ? 'QUESTION SUIVANTE' : 'PODIUM FINAL'}</button>
+        </div>`;
+        container.innerHTML = html;
+        return;
+      }
+
+      // 3. QUESTION EN DIRECT
+      if (gameState.status === 'question' && gameState.currentQ) {
+        const q = gameState.currentQ;
+        const qType = q.type || 'qcm';
+        const rev = gameState.revealData || {};
+        const letters = ['A', 'B', 'C', 'D'];
+
+        let html = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
+          <span style="color:var(--gold-trophy); font-weight:bold; text-transform:uppercase; font-size:1.1rem;">Question ${gameState.qIndex + 1} / ${gameState.totalQuestions}</span>
+          ${gameState.doublePoints ? `<span class="double-banner" style="margin:0;">⚡ POINTS DOUBLES x2 ⚡</span>` : ''}
+          <span style="display:flex; align-items:center; gap:10px;">
+            ${gameState.timerDuration > 0 && !gameState.isRevealed ? `<span id="tv-timer-seconds" style="background:#11141c; border:1px solid var(--gold-trophy); color:var(--gold-trophy); padding:5px 12px; border-radius:99px; font-weight:900;">${gameState.timerDuration}s</span>` : ''}
+            <span id="gm-live-voted-pill" style="background:#11141c; border:1px solid var(--border-metallic); padding:5px 12px; border-radius:99px; font-size:0.9rem;">0 vote</span>
+          </span>
+        </div>`;
+
+        html += `<div class="question-text" style="text-align:center; font-size:1.75rem; font-weight:bold; margin-bottom:22px; line-height:1.3;">${escapeHtml(q.q)}</div>`;
+
+        if (q.qImg && qType !== 'hotspot') {
+          html += `<img src="${q.qImg}" style="max-height:270px; max-width:100%; display:block; margin:0 auto 24px; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.45);">`;
+        }
+
+        if (qType === 'qcm' || qType === 'multi' || qType === 'poll' || qType === 'tf') {
+          const maxOpts = qType === 'tf' ? 2 : 4;
+          const corrMulti = Array.isArray(rev.correctMulti) ? rev.correctMulti : [rev.correct];
+          html += `<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">`;
+          for (let i = 0; i < maxOpts; i++) {
+            const txt = q.opts[i];
+            if (!txt && !(q.optImgs && q.optImgs[i]) && qType !== 'tf') continue;
+            let stateStyle = '';
+            let cardCls = 'tv-opt-card';
+            if (gameState.isRevealed && qType !== 'poll') {
+              const isGood = qType === 'multi' ? corrMulti.includes(i) : (i === rev.correct);
+              if (isGood) {
+                cardCls += ' revealed-correct';
+                stateStyle = 'border-color:var(--accent-green); box-shadow:0 0 25px rgba(34,197,94,0.35);';
+              } else {
+                stateStyle = 'opacity:0.38; filter:grayscale(0.8);';
+              }
+            }
+            const pct = (gameState.isRevealed && rev.votedCount > 0 && rev.optionCounts)
+              ? Math.round(((rev.optionCounts[i] || 0) / rev.votedCount) * 100)
+              : 0;
+            const optImg = (q.optImgs && q.optImgs[i]) ? `<img src="${q.optImgs[i]}" style="max-height:110px; border-radius:8px; margin-top:10px; align-self:center; position:relative; z-index:1;">` : '';
+
+            html += `<div class="${cardCls}" style="${stateStyle}">
+              <div class="tv-opt-fill" style="width:${gameState.isRevealed ? pct : 0}%;"></div>
+              <div class="tv-opt-content">
+                <span style="color:var(--gold-trophy); font-size:1.7rem;">${qType === 'tf' ? (i === 0 ? '✅' : '❌') : letters[i] + '.'}</span>
+                <span style="flex:1;">${escapeHtml(txt)}</span>
+                ${gameState.isRevealed
+                  ? `<span style="background:#11141c; border:1px solid var(--border-metallic); padding:6px 14px; border-radius:99px; font-size:1.05rem;">${pct}% (${(rev.optionCounts && rev.optionCounts[i]) || 0})</span>`
+                  : `<span id="gm-opt-cnt-${i}" class="vote-counter-live" style="background:var(--carmin-red); color:white; padding:6px 14px; border-radius:99px; font-size:1.1rem;">0</span>`}
+              </div>
+              ${optImg}
+            </div>`;
+          }
+          html += `</div>`;
+        }
+        else if (qType === 'estimate') {
+          html += `<div style="background:#131722; border:2px solid var(--border-metallic); border-radius:16px; padding:28px; text-align:center;">
+            <div style="font-size:1.2rem; color:var(--text-muted); margin-bottom:10px;">Curseur d'estimation entre <strong>${q.min} ${escapeHtml(q.unit)}</strong> et <strong>${q.max} ${escapeHtml(q.unit)}</strong></div>
+            ${gameState.isRevealed ? `
+              <div style="display:flex; justify-content:center; gap:30px; flex-wrap:wrap; margin-top:16px;">
+                <div style="background:rgba(34,197,94,0.15); border:2px solid var(--accent-green); padding:18px 26px; border-radius:12px;">
+                  <div style="font-size:0.85rem; text-transform:uppercase; color:#86efac;">Valeur Exacte</div>
+                  <div style="font-size:2.2rem; font-weight:900; color:var(--accent-green);">${rev.targetVal} ${escapeHtml(q.unit)}</div>
+                  <div style="font-size:0.8rem; color:var(--text-muted);">Tolérance : ± ${rev.tolerance} ${escapeHtml(q.unit)}</div>
+                </div>
+                <div style="background:#1b202e; border:2px solid var(--accent-blue); padding:18px 26px; border-radius:12px;">
+                  <div style="font-size:0.85rem; text-transform:uppercase; color:var(--accent-blue);">Moyenne de la Salle</div>
+                  <div style="font-size:2.2rem; font-weight:900;">${rev.estimateAvg !== null ? rev.estimateAvg + ' ' + escapeHtml(q.unit) : '-'}</div>
+                  ${rev.closestPlayer ? `<div style="font-size:0.85rem; color:var(--gold-trophy); margin-top:4px;">🎯 Plus proche : ${escapeHtml(rev.closestPlayer.name)} (${rev.closestPlayer.val} ${escapeHtml(q.unit)})</div>` : ''}
+                </div>
+              </div>
+            ` : `<div style="font-size:1.5rem; color:var(--gold-trophy); font-weight:bold;">Les joueurs estiment le montant sur leur téléphone...</div>`}
+          </div>`;
+        }
+        else if (qType === 'hotspot') {
+          const pinsHtml = (gameState.isRevealed && Array.isArray(rev.hotspotPins))
+            ? rev.hotspotPins.map(pt => `<div class="hotspot-pin" title="${escapeHtml(pt.name)}" style="left:${pt.x}%; top:${pt.y}%; background:${pt.ok ? '#22c55e' : '#ef4444'};"></div>`).join('')
+            : '';
+          const rectHtml = (gameState.isRevealed && rev.hotspot)
+            ? `<div class="hotspot-target-rect" style="left:${rev.hotspot.x - rev.hotspot.w/2}%; top:${rev.hotspot.y - rev.hotspot.h/2}%; width:${rev.hotspot.w}%; height:${rev.hotspot.h}%;"></div>`
+            : '';
+          html += `<div style="text-align:center;">
+            <div class="hotspot-stage">
+              <img src="${q.qImg || ''}" alt="Expertise Visuelle" style="max-height:380px;">
+              ${rectHtml}
+              ${pinsHtml}
+            </div>
+          </div>`;
+        }
+
+        if (!gameState.isRevealed && gameState.isClueOpen && (q.clue || q.cImg)) {
+          html += `<div style="background:var(--accent-amber); color:#000; font-weight:bold; padding:16px; border-radius:12px; margin-top:22px; font-size:1.2rem; text-align:center;">
+            🔍 Indice : ${escapeHtml(q.clue)}
+            ${q.cImg ? `<br><img src="${q.cImg}" style="max-height:180px; margin-top:10px; border-radius:8px;">` : ''}
+          </div>`;
+        }
+
+        if (gameState.isRevealed && (rev.anecdote || rev.aImg)) {
+          html += `<div style="background:rgba(34,197,94,0.1); border:2px solid var(--accent-green); padding:20px; border-radius:12px; margin-top:22px; color:#d1fae5; font-size:1.18rem; text-align:center;">
+            <strong>📖 L'Explication Métier (${rev.successPct || 0}% de réussite) :</strong><br>${escapeHtml(rev.anecdote)}
+            ${rev.aImg ? `<br><img src="${rev.aImg}" style="max-height:220px; margin-top:12px; border-radius:8px;">` : ''}
+          </div>`;
+        }
+
+        html += `<div class="btn-tv-hide" style="margin-top:24px;">`;
+        if (!gameState.isRevealed) {
+          html += `<div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn btn-dark" style="flex:1; padding:16px;" onclick="toggleClue()">🔍 ${gameState.isClueOpen ? 'Masquer indice' : 'Afficher indice'}</button>
+            <button class="btn btn-gold" style="flex:1; padding:16px;" onclick="toggleDoublePoints()">⚡ ${gameState.doublePoints ? 'Annuler x2' : 'Manche x2'}</button>
+            <button class="btn btn-red" style="flex:2; padding:16px; font-size:1.15rem;" onclick="revealAnswer()">🏁 RÉVÉLER LA RÉPONSE</button>
+          </div>`;
+        } else {
+          html += `<div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn btn-dark" style="flex:1; padding:16px; border-color:var(--gold-trophy); color:var(--gold-trophy);" onclick="toggleMidLeaderboard()">🏆 Top 5 Mi-Temps</button>
+            <button class="btn btn-green" style="flex:2; padding:16px; font-size:1.25rem;" onclick="nextQuestion()">➡️ ${gameState.qIndex + 1 < gameState.totalQuestions ? 'QUESTION SUIVANTE' : 'VOIR LE PODIUM FINAL'}</button>
+          </div>`;
+        }
+        html += `</div>`;
+
+        container.innerHTML = html;
+        updateGMSidebarAndLiveCounters();
+        return;
+      }
+
+      // 4. PODIUM FINAL
+      if (gameState.status === 'leaderboard') {
+        let html = `<h2 style="color:var(--gold-trophy); font-size:3rem; text-align:center; margin-bottom:28px; text-transform:uppercase;">🏆 Podium Final</h2>`;
+        html += renderLeaderboardBlockHtml(gameState.leaderboard, gameState.teamLeaderboard, true);
+        html += `<div class="btn-tv-hide" style="display:flex; justify-content:center; gap:12px; margin-top:34px; flex-wrap:wrap;">
+          <button class="btn btn-green" onclick="openStatsExportModal()">📊 Voir / Exporter le Bilan Formation</button>
+          <button class="btn btn-dark" onclick="db.ref('state/status').set('lobby')">🏠 Retour au Lobby QR</button>
+        </div>`;
+        container.innerHTML = html;
+      }
+    }
+
+    // Mise à jour en place des compteurs et de la barre latérale (ZÉRO clignotement sur l'écran TV)
+    function updateGMSidebarAndLiveCounters() {
+      if (myRole !== 'maitre') return;
+      const pList = computeRankedList(playersData);
+      const cntEl = document.getElementById('gm-pres-count');
+      if (cntEl) cntEl.innerText = pList.length;
+
+      let votedTotal = 0;
+      const liveCounts = [0, 0, 0, 0];
+      Object.values(playersData).forEach(p => {
+        if (p.vote !== -1 && p.vote !== undefined) {
+          votedTotal++;
+          if (p.vote >= 0 && p.vote <= 3) liveCounts[p.vote]++;
+        }
+      });
+
+      const pill = document.getElementById('gm-live-voted-pill');
+      if (pill) pill.innerText = `${votedTotal} / ${pList.length} ont répondu`;
+
+      [0, 1, 2, 3].forEach(i => {
+        const badge = document.getElementById('gm-opt-cnt-' + i);
+        if (badge) badge.innerText = liveCounts[i];
+      });
+
+      const sideEl = document.getElementById('gm-pres-players');
+      if (!sideEl) return;
+      if (pList.length === 0) {
+        sideEl.innerHTML = `<div style="color:var(--text-muted); font-size:0.9rem;">Aucun joueur connecté.</div>`;
+        return;
+      }
+      sideEl.innerHTML = pList.map(p => {
+        const raw = playersData[p.uid] || {};
+        const votedMark = (gameState.status === 'question' && !gameState.isRevealed && raw.vote !== -1 && raw.vote !== undefined) ? ' ✅' : '';
+        const statusDot = p.online ? '🟢' : '⚪';
+        return `<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #282e3d; font-size:0.92rem;">
+          <span>${statusDot} <strong>${escapeHtml(p.name)}</strong>${votedMark}</span>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <button class="btn-dark" style="padding:2px 7px; border-radius:4px; cursor:pointer;" onclick="editMatchScore('${p.uid}', -50)">-</button>
+            <span style="color:var(--gold-trophy); font-weight:bold; min-width:44px; text-align:center;">${p.score}</span>
+            <button class="btn-dark" style="padding:2px 7px; border-radius:4px; cursor:pointer;" onclick="editMatchScore('${p.uid}', 50)">+</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    // Vue Télécommande Mobile Animateur (avec antisèche privée avant révélation !)
+    function renderGMRemoteView() {
+      const box = document.getElementById('gm-remote-content');
+      if (!box) return;
+      const totalP = Object.keys(playersData).length;
+      const votedP = Object.values(playersData).filter(p => p.vote !== -1 && p.vote !== undefined).length;
+      const vp = document.getElementById('remote-vote-progress');
+      if (vp) vp.innerText = `${votedP} / ${totalP} votes`;
+
+      if (gameState.status === 'lobby') {
+        box.innerHTML = `
+          <p style="color:var(--text-muted); margin-bottom:14px;">Le grand écran affiche actuellement le QR Code (${totalP} joueur(s) prêt(s)).</p>
+          <button class="btn btn-green" style="width:100%; padding:18px; font-size:1.15rem;" onclick="launchQuiz()">🚀 Lancer le Quiz sélectionné</button>`;
+        return;
+      }
+
+      if (gameState.status === 'leaderboard') {
+        box.innerHTML = `
+          <h3 style="color:var(--gold-trophy); text-align:center; margin-bottom:16px;">🏆 Podium affiché à l'écran</h3>
+          <button class="btn btn-dark" style="width:100%; padding:16px;" onclick="db.ref('state/status').set('lobby')">🏠 Retourner au Lobby QR</button>`;
+        return;
+      }
+
+      const fullEv = getActiveFullQuestion();
+      const letters = ['A', 'B', 'C', 'D'];
+      let secretAnswer = '-';
+      if (fullEv) {
+        if (fullEv.type === 'qcm') secretAnswer = `${letters[fullEv.correct]} — ${fullEv.opts[fullEv.correct]}`;
+        else if (fullEv.type === 'tf') secretAnswer = fullEv.correct === 0 ? 'VRAI' : 'FAUX';
+        else if (fullEv.type === 'multi') secretAnswer = (fullEv.correctMulti || []).map(i => letters[i]).join(', ');
+        else if (fullEv.type === 'estimate') secretAnswer = `${fullEv.targetVal} ${fullEv.unit} (± ${fullEv.tolerance})`;
+        else if (fullEv.type === 'hotspot') secretAnswer = `Zone (${fullEv.hotspot.x}%, ${fullEv.hotspot.y}%)`;
+        else secretAnswer = 'Sondage libre (0 pt)';
+      }
+
+      box.innerHTML = `
+        <div style="background:#11141c; padding:14px; border-radius:10px; border:1px solid var(--border-metallic); margin-bottom:14px;">
+          <div style="display:flex; justify-content:space-between; color:var(--gold-trophy); font-weight:bold; font-size:0.9rem; margin-bottom:6px;">
+            <span>Q${gameState.qIndex + 1}/${gameState.totalQuestions}</span>
+            <span id="remote-timer-seconds">${gameState.timerDuration > 0 && !gameState.isRevealed ? gameState.timerDuration + 's' : ''}</span>
+          </div>
+          <div style="font-weight:bold; font-size:1.05rem; margin-bottom:10px;">${escapeHtml(gameState.currentQ ? gameState.currentQ.q : '')}</div>
+          <div style="background:rgba(192,132,252,0.12); border:1px dashed #c084fc; padding:10px; border-radius:8px; font-size:0.88rem;">
+            🔒 <strong>Notes Animateur (Privé) :</strong><br>
+            ✔️ Réponse : <strong style="color:var(--accent-green);">${escapeHtml(secretAnswer)}</strong><br>
+            📖 Note : ${escapeHtml(fullEv && fullEv.anecdote ? fullEv.anecdote : 'Aucune note.')}
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          ${!gameState.isRevealed ? `
+            <button class="btn btn-dark" style="padding:16px;" onclick="toggleClue()">🔍 Indice</button>
+            <button class="btn btn-gold" style="padding:16px;" onclick="toggleDoublePoints()">⚡ Manche x2</button>
+            <button class="btn btn-red" style="grid-column:1/-1; padding:20px; font-size:1.2rem;" onclick="revealAnswer()">🏁 RÉVÉLER LA RÉPONSE</button>
+          ` : `
+            <button class="btn btn-dark" style="grid-column:1/-1; padding:16px; border-color:var(--gold-trophy); color:var(--gold-trophy);" onclick="toggleMidLeaderboard()">🏆 ${gameState.showMidBoard ? 'Masquer Mi-Temps' : 'Afficher Top 5 Mi-Temps'}</button>
+            <button class="btn btn-green" style="grid-column:1/-1; padding:20px; font-size:1.2rem;" onclick="nextQuestion()">➡️ ${gameState.qIndex + 1 < gameState.totalQuestions ? 'QUESTION SUIVANTE' : 'PODIUM FINAL'}</button>
+          `}
+        </div>`;
+    }
+
+    // Raccourcis clavier Mode TV
+    function toggleTVMode() {
+      isTVMode = !isTVMode;
+      applyView();
+      try {
+        if (isTVMode && document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        } else if (!isTVMode && document.fullscreenElement && document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        }
+      } catch(e){}
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+      if (myRole === 'maitre' && isTVMode) {
+        if (e.code === 'Space') {
+          e.preventDefault();
+          if (gameState.status === 'question') {
+            if (!gameState.isRevealed) revealAnswer();
+            else nextQuestion();
+          }
+        } else if (e.code === 'KeyI' && gameState.status === 'question' && !gameState.isRevealed) {
+          e.preventDefault(); toggleClue();
+        } else if (e.code === 'KeyD' && gameState.status === 'question' && !gameState.isRevealed) {
+          e.preventDefault(); toggleDoublePoints();
+        } else if (e.code === 'KeyM' && gameState.status === 'question' && gameState.isRevealed) {
+          e.preventDefault(); toggleMidLeaderboard();
+        } else if (e.code === 'Escape') {
+          toggleTVMode();
+        }
+      }
+    });
+
+    // Outils Salon GM
+    window.editMatchScore = function(uid, delta) {
+      if (myRole !== 'maitre' || !playersData[uid]) return;
+      const next = Math.max(0, (playersData[uid].score || 0) + delta);
+      db.ref('players/' + uid + '/score').set(next);
+    };
+
+    function pruneOfflinePlayers() {
+      const updates = {};
+      let count = 0;
+      Object.keys(playersData).forEach(uid => {
+        if (playersData[uid].online === false) { updates[uid] = null; count++; }
+      });
+      if (count === 0) return showToast("Tous les joueurs listés sont actuellement en ligne (🟢).");
+      db.ref('players').update(updates);
+      showToast(`🧹 ${count} joueur(s) hors-ligne retiré(s).`);
+    }
+
+    function confirmResetRoom() {
+      openModal(
+        "🗑️ Vider le salon actif",
+        "Voulez-vous réinitialiser la salle et déconnecter les joueurs de la session en cours ? (Leurs comptes et scores carrière sont intégralement conservés).",
+        [
+          { label: "Annuler", cls: "btn-dark", onClick: closeModal },
+          { label: "Vider le salon", cls: "btn-red", onClick: () => {
+              closeModal();
+              db.ref('players').remove();
+              gameState.status = 'lobby';
+              gameState.isRevealed = false;
+              pushState();
+              showToast("Salon réinitialisé.");
+            }
+          }
+        ]
+      );
+    }
+
+    function openQRSettingsModal() {
+      const curr = getEffectiveJoinUrl();
+      openModal(
+        "🔗 Lien d'accès Joueurs & QR Code",
+        `<p style="font-size:0.9rem; color:var(--text-muted); margin-bottom:10px;">Indiquez l'adresse publique de votre Google Site ou de votre hébergement Firebase vers laquelle le QR Code doit pointer :</p>
+         <input type="url" id="cfg-join-url-input" value="${escapeHtml(curr)}" placeholder="https://sites.google.com/view/...">`,
+        [
+          { label: "Annuler", cls: "btn-dark", onClick: closeModal },
+          { label: "Enregistrer l'URL", cls: "btn-green", onClick: () => {
+              const v = document.getElementById('cfg-join-url-input').value.trim();
+              db.ref('config/joinUrl').set(v);
+              closeModal();
+              showToast("✅ Lien du QR Code mis à jour !");
+            }
+          }
+        ]
+      );
+    }
+
+    function openTeamsConfigModal() {
+      const teams = appConfig.teams || [];
+      const fields = teams.map((t, idx) => `
+        <div class="editor-field">
+          <label>Équipe ${idx + 1} :</label>
+          <input type="text" id="team-name-${idx}" value="${escapeHtml(t.name)}" maxlength="24">
+        </div>`).join('');
+      openModal("🛡️ Personnaliser le nom des Équipes", fields, [
+        { label: "Annuler", cls: "btn-dark", onClick: closeModal },
+        { label: "Sauvegarder", cls: "btn-green", onClick: () => {
+            const updated = teams.map((t, idx) => ({
+              id: t.id,
+              color: t.color,
+              name: document.getElementById('team-name-' + idx).value.trim() || t.name
+            }));
+            db.ref('config/teams').set(updated);
+            closeModal();
+            showToast("✅ Noms des équipes enregistrés !");
+          }
+        }
+      ]);
+    }
+
+    // =========================================================================
+    // 17. COMPTES, PALMARÈS & EXPORT BILAN CSV / EXCEL (GOOGLE SITES SAFE)
+    // =========================================================================
+    function updateLeaderboardDropdown() {
+      const sel = document.getElementById('gm-leaderboard-selector');
+      if (!sel) return;
+      const prev = sel.value;
+      let opts = `<option value="global">🌍 Classement Général Carrière (Tous quiz confondus)</option>`;
+      const unique = {};
+      Object.values(globalAccounts).forEach(acc => {
+        if (acc && acc.quizScores) {
+          Object.keys(acc.quizScores).forEach(qId => { unique[qId] = acc.quizScores[qId].label || qId; });
+        }
+      });
+      Object.keys(unique).forEach(qId => { opts += `<option value="${escapeHtml(qId)}">📌 Meilleurs scores : ${escapeHtml(unique[qId])}</option>`; });
+      sel.innerHTML = opts;
+      if (unique[prev] || prev === 'global') sel.value = prev;
+      renderGMLeaderboard();
+    }
+
+    window.renderGMLeaderboard = function() {
+      const sel = document.getElementById('gm-leaderboard-selector').value;
+      const container = document.getElementById('gm-leaderboard-container');
+      if (!container) return;
+
+      const list = [];
+      Object.keys(globalAccounts).forEach(uid => {
+        const acc = globalAccounts[uid];
+        if (!acc) return;
+        if (sel === 'global' && (acc.globalScore || 0) > 0) list.push({ name: acc.name, score: acc.globalScore });
+        else if (acc.quizScores && acc.quizScores[sel]) list.push({ name: acc.name, score: acc.quizScores[sel].score });
+      });
+      list.sort((a, b) => b.score - a.score);
+
+      let rank = 1;
+      list.forEach((item, idx) => {
+        if (idx > 0 && item.score < list[idx - 1].score) rank = idx + 1;
+        item.rank = rank;
+      });
+
+      if (list.length === 0) {
+        container.innerHTML = `<p style="text-align:center; color:var(--text-muted);">Aucun score enregistré sur cette sélection.</p>`;
+        return;
+      }
+      container.innerHTML = `<div style="max-width:680px; margin:0 auto;">` + list.slice(0, 15).map(p => {
+        const cls = p.rank === 1 ? 'rank-1' : (p.rank === 2 ? 'rank-2' : (p.rank === 3 ? 'rank-3' : 'rank-other'));
+        const med = p.rank === 1 ? '🥇' : (p.rank === 2 ? '🥈' : (p.rank === 3 ? '🥉' : `${p.rank}.`));
+        return `<div class="lb-item ${cls}" style="padding:13px 18px;"><span>${med} ${escapeHtml(p.name)}</span><span style="color:var(--gold-trophy);">${p.score} pts</span></div>`;
+      }).join('') + `</div>`;
+    };
+
+    function buildReportRows() {
+      const rows = [["Section", "Rang / Question", "Nom / Intitule", "Score / Taux Reussite", "Detail"]];
+      const lb = (gameState.leaderboard && gameState.leaderboard.length > 0) ? gameState.leaderboard : computeRankedList(playersData);
+      lb.forEach(p => {
+        const career = (globalAccounts[p.uid] && globalAccounts[p.uid].globalScore) || p.score || 0;
+        rows.push(["Classement Partie", p.rank, p.name, p.score + " pts", "Carriere: " + career + " pts"]);
+      });
+      (gameState.historyStats || []).forEach(h => {
+        rows.push(["Analyse Question", "Q" + h.qIndex, h.q, h.successPct + "%", `${h.successCount}/${h.votedCount} bonnes reponses`]);
+      });
+      if (lb.length === 0 && (gameState.historyStats || []).length === 0) {
+        Object.values(globalAccounts).sort((a, b) => (b.globalScore || 0) - (a.globalScore || 0)).forEach((acc, i) => {
+          rows.push(["Palmares Global", i + 1, acc.name || "Joueur", (acc.globalScore || 0) + " pts", acc.provider || "local"]);
+        });
+      }
+      return rows;
+    }
+
+    window.openStatsExportModal = function() {
+      const rows = buildReportRows();
+      const preview = rows.slice(1, 12).map(r => `<tr><td style="padding:6px 8px; border-bottom:1px solid #282e3d;">${escapeHtml(r[0])}</td><td style="padding:6px 8px; border-bottom:1px solid #282e3d;">${escapeHtml(r[1])}</td><td style="padding:6px 8px; border-bottom:1px solid #282e3d;">${escapeHtml(r[2])}</td><td style="padding:6px 8px; border-bottom:1px solid #282e3d; color:var(--gold-trophy); font-weight:bold;">${escapeHtml(r[3])}</td></tr>`).join('');
+
+      openModal(
+        "📊 Bilan de Session & Export Excel",
+        `<p style="font-size:0.88rem; color:var(--text-muted); margin-bottom:12px;">Téléchargez le fichier CSV (compatible Excel) ou copiez le tableau en 1 clic pour le coller directement dans Google Sheets / Excel (fonctionne même dans un cadre Google Sites restreint).</p>
+         <div class="table-container" style="max-height:240px; overflow-y:auto; font-size:0.84rem;">
+           <table style="width:100%; border-collapse:collapse;">${preview || '<tr><td style="padding:10px;">Aucune donnée disponible.</td></tr>'}</table>
+         </div>`,
+        [
+          { label: "Fermer", cls: "btn-dark", onClick: closeModal },
+          { label: "📋 Copier pour Sheets/Excel", cls: "btn-gold", onClick: copyTSVReport },
+          { label: "💾 Télécharger .CSV", cls: "btn-green", onClick: downloadCSVReport }
+        ]
+      );
+    };
+
+    window.downloadCSVReport = function() {
+      const rows = buildReportRows();
+      const csv = "\uFEFF" + rows.map(r => r.map(cell => `"${String(cell || '').replace(/"/g, '""')}"`).join(';')).join('\r\n');
+      try {
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `bilan_autoquiz_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        showToast("📥 Téléchargement CSV lancé !");
+      } catch (e) {
+        copyTSVReport();
+      }
+    };
+
+    window.copyTSVReport = function() {
+      const rows = buildReportRows();
+      const tsv = rows.map(r => r.map(cell => String(cell || '').replace(/\t|\r|\n/g, ' ')).join('\t')).join('\n');
+      safeCopyText(tsv, "📋 Tableau copié ! Faites Ctrl+V dans Excel ou Google Sheets.");
+    };
+
+    function renderGMAccountsView() {
+      const tbody = document.getElementById('accounts-table-body');
+      if (!tbody) return;
+      const uids = Object.keys(globalAccounts);
+      if (uids.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted);">Aucun compte enregistré.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = uids.map(uid => {
+        const acc = globalAccounts[uid] || {};
+        const isGoogle = uid.startsWith('g_') || acc.provider === 'google';
+        const authHtml = isGoogle
+          ? `<span class="badge-google">Google</span> <span style="font-size:0.82rem; color:var(--text-muted);">${escapeHtml(acc.email || '')}</span>`
+          : `<span style="font-size:0.82rem; color:var(--accent-green);">🔒 Mot de passe chiffré (SHA-256)</span>`;
+
+        return `<tr>
+          <td><strong>${escapeHtml(acc.name || uid)}</strong></td>
+          <td>${authHtml}</td>
+          <td><span style="color:var(--gold-trophy); font-weight:bold;">${acc.globalScore || 0} pts</span></td>
+          <td>
+            <button class="btn btn-dark" style="padding:6px 11px; font-size:0.85rem;" onclick="openEditAccountModal('${uid}')">✏️ Modifier</button>
+            <button class="btn btn-dark" style="padding:6px 11px; font-size:0.85rem; color:#f87171;" onclick="confirmDeleteAccount('${uid}')">🗑️</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    window.openEditAccountModal = function(uid) {
+      const acc = globalAccounts[uid];
+      if (!acc) return;
+      const isGoogle = uid.startsWith('g_') || acc.provider === 'google';
+
+      openModal(
+        "✏️ Modifier le profil joueur",
+        `<div class="editor-field">
+          <label>Pseudo affiché :</label>
+          <input type="text" id="edit-acc-name" value="${escapeHtml(acc.name)}" maxlength="20">
+        </div>
+        ${!isGoogle ? `
+        <div class="editor-field">
+          <label>Nouveau mot de passe (laisser vide pour ne pas changer) :</label>
+          <input type="password" id="edit-acc-pwd" placeholder="Nouveau mot de passe...">
+        </div>` : `<p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:10px;">Compte Google (${escapeHtml(acc.email || '')}).</p>`}
+        <div class="editor-field">
+          <label>Score Carrière Global :</label>
+          <input type="number" id="edit-acc-score" value="${acc.globalScore || 0}" min="0">
+        </div>`,
+        [
+          { label: "Annuler", cls: "btn-dark", onClick: closeModal },
+          { label: "Enregistrer", cls: "btn-green", onClick: async () => {
+              const cleanName = document.getElementById('edit-acc-name').value.trim();
+              if (cleanName.length < 2) return showToast("⚠️ Le pseudo doit contenir au moins 2 caractères.");
+              const newScore = Math.max(0, parseInt(document.getElementById('edit-acc-score').value, 10) || 0);
+
+              if (isGoogle) {
+                db.ref('accounts/' + uid).update({ name: cleanName, globalScore: newScore });
+                if (playersData[uid]) db.ref('players/' + uid).update({ name: cleanName });
+                closeModal();
+                showToast("✅ Profil Google mis à jour !");
+              } else {
+                const rawNewPwd = document.getElementById('edit-acc-pwd').value.trim();
+                const newKey = pseudoToAccountKey(cleanName);
+                if (!newKey) return showToast("⚠️ Pseudo invalide.");
+                const patchHash = rawNewPwd ? await sha256Hex(rawNewPwd) : (acc.pwdHash || await sha256Hex(acc.password || '1234'));
+
+                if (newKey !== uid) {
+                  if (globalAccounts[newKey]) return showToast("⚠️ Ce pseudo est déjà utilisé par un autre compte !");
+                  const migrated = { name: cleanName, provider: "local", pwdHash: patchHash, globalScore: newScore };
+                  if (acc.quizScores) migrated.quizScores = acc.quizScores;
+                  db.ref('accounts/' + newKey).set(migrated);
+                  db.ref('accounts/' + uid).remove();
+                  db.ref('players/' + uid).remove();
+                } else {
+                  db.ref('accounts/' + uid).update({ name: cleanName, pwdHash: patchHash, password: null, globalScore: newScore });
+                  if (playersData[uid]) db.ref('players/' + uid).update({ name: cleanName });
+                }
+                closeModal();
+                showToast("✅ Compte local mis à jour !");
+              }
+            }
+          }
+        ]
+      );
+    };
+
+    window.confirmDeleteAccount = function(uid) {
+      const acc = globalAccounts[uid];
+      if (!acc) return;
+      openModal(
+        "🗑️ Supprimer ce compte",
+        `Confirmez-vous la suppression définitive de <strong>${escapeHtml(acc.name)}</strong> et de son historique ?`,
+        [
+          { label: "Annuler", cls: "btn-dark", onClick: closeModal },
+          { label: "Supprimer", cls: "btn-red", onClick: () => {
+              closeModal();
+              db.ref('accounts/' + uid).remove();
+              db.ref('players/' + uid).remove();
+              showToast("Compte supprimé.");
+            }
+          }
+        ]
+      );
+    };
+
+    // =========================================================================
+    // 18. ÉDITEUR DE QUIZ MULTI-FORMATS & SYNCHRONISATION FIREBASE
+    // =========================================================================
+    function loadEditionIntoEditor(id) {
+      const full = getFullDB();
+      const targetId = full[id] ? id : Object.keys(full)[0];
+      editorEditingId = targetId;
+      document.getElementById('gm-edit-selector').value = targetId;
+      editorModel = JSON.parse(JSON.stringify(full[targetId]));
+      editorModel.events = (editorModel.events || []).map(normalizeQuestion);
+      document.getElementById('editor-title').value = editorModel.label || "";
+      renderEditorForm();
+    }
+
+    function createNewEdition() {
+      editorEditingId = `custom-${Date.now()}`;
+      editorModel = { label: "Nouveau Quiz B2B", events: [normalizeQuestion({ q: "Nouvelle question", opts: ["Réponse A", "Réponse B", "Réponse C", "Réponse D"] })] };
+      document.getElementById('editor-title').value = editorModel.label;
+      renderEditorForm();
+    }
+
+    function confirmDeleteEdition() {
+      if (!customEditions[editorEditingId]) return showToast("⚠️ Seul un quiz personnalisé (☁️) peut être supprimé.");
+      openModal(
+        "🗑️ Supprimer ce quiz du Cloud",
+        `Voulez-vous supprimer définitivement <strong>${escapeHtml(editorModel.label)}</strong> sur tous vos appareils ?`,
+        [
+          { label: "Annuler", cls: "btn-dark", onClick: closeModal },
+          { label: "Supprimer", cls: "btn-red", onClick: () => {
+              const delId = editorEditingId;
+              closeModal();
+              delete customEditions[delId];
+              db.ref('editions/' + delId).remove();
+              try { localStorage.setItem('autoquiz_editions_v5', JSON.stringify(customEditions)); } catch(e){}
+              updateSelectMenus();
+              loadEditionIntoEditor('week-44');
+              showToast("Quiz supprimé.");
+            }
+          }
+        ]
+      );
+    }
+
+    function addQuestionToEditor() {
+      editorModel.events.push(normalizeQuestion({ q: "" }));
+      renderEditorForm();
+    }
+
+    function removeQuestionFromEditor(idx) {
+      editorModel.events.splice(idx, 1);
+      renderEditorForm();
+    }
+
+    window.changeQuestionType = function(idx, newType) {
+      const ev = editorModel.events[idx];
+      ev.type = newType;
+      if (newType === 'tf') { ev.opts[0] = 'Vrai'; ev.opts[1] = 'Faux'; if (ev.correct > 1) ev.correct = 0; }
+      renderEditorForm();
+    };
+
+    window.toggleCorrectMulti = function(idx, oIdx) {
+      const ev = editorModel.events[idx];
+      ev.correctMulti = Array.isArray(ev.correctMulti) ? ev.correctMulti : [];
+      const pos = ev.correctMulti.indexOf(oIdx);
+      if (pos >= 0 && ev.correctMulti.length > 1) ev.correctMulti.splice(pos, 1);
+      else if (pos < 0) ev.correctMulti.push(oIdx);
+      renderEditorForm();
+    };
+
+    window.setEditorHotspotCenter = function(event, idx) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const x = Math.round(((event.clientX - rect.left) / rect.width) * 100);
+      const y = Math.round(((event.clientY - rect.top) / rect.height) * 100);
+      editorModel.events[idx].hotspot.x = Math.max(5, Math.min(95, x));
+      editorModel.events[idx].hotspot.y = Math.max(5, Math.min(95, y));
+      renderEditorForm();
+    };
+
+    function renderEditorForm() {
+      const container = document.getElementById('editor-questions-container');
+      if (!container) return;
+
+      container.innerHTML = editorModel.events.map((ev, idx) => {
+        const t = ev.type || 'qcm';
+        let specificHtml = '';
+
+        if (t === 'qcm' || t === 'multi' || t === 'poll') {
+          specificHtml += [0, 1, 2, 3].map(oIdx => {
+            const isChecked = (ev.correctMulti || []).includes(oIdx);
+            return `
+            <div class="editor-field" style="background:#191c24; padding:12px; border-radius:8px; border:1px solid #2d3342;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <label>Option ${String.fromCharCode(65 + oIdx)} :</label>
+                ${t === 'multi' ? `<label style="color:var(--accent-green); cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="checkbox" style="width:auto;" ${isChecked ? 'checked' : ''} onchange="toggleCorrectMulti(${idx}, ${oIdx})"> Bonne réponse</label>` : ''}
+              </div>
+              <input type="text" value="${escapeHtml(ev.opts[oIdx])}" oninput="editorModel.events[${idx}].opts[${oIdx}] = this.value">
+              <div class="img-upload-box" style="padding:6px; margin-top:6px;">
+                <input type="file" accept="image/*" style="font-size:0.78rem; border:none; background:transparent;" onchange="handleImgUpload(event, ${idx}, 'optImgs', ${oIdx})">
+                ${ev.optImgs[oIdx] ? `<img src="${ev.optImgs[oIdx]}" class="img-preview"><button type="button" class="btn-remove-img" onclick="removeImg(${idx}, 'optImgs', ${oIdx})">✕</button>` : ''}
+              </div>
+            </div>`;
+          }).join('');
+
+          if (t === 'qcm') {
+            specificHtml += `
+            <div class="editor-field full">
+              <label style="color:var(--accent-green);">Bonne réponse unique :</label>
+              <select style="border-color:var(--accent-green); font-weight:bold;" onchange="editorModel.events[${idx}].correct = parseInt(this.value, 10)">
+                ${[0, 1, 2, 3].map(oIdx => `<option value="${oIdx}" ${ev.correct === oIdx ? 'selected' : ''}>Réponse ${String.fromCharCode(65 + oIdx)}</option>`).join('')}
+              </select>
+            </div>`;
+          }
+        }
+        else if (t === 'tf') {
+          specificHtml += `
+            <div class="editor-field full">
+              <label style="color:var(--accent-green);">Réponse attendue :</label>
+              <select style="border-color:var(--accent-green); font-weight:bold;" onchange="editorModel.events[${idx}].correct = parseInt(this.value, 10)">
+                <option value="0" ${ev.correct === 0 ? 'selected' : ''}>✅ VRAI</option>
+                <option value="1" ${ev.correct === 1 ? 'selected' : ''}>❌ FAUX</option>
+              </select>
+            </div>`;
+        }
+        else if (t === 'estimate') {
+          specificHtml += `
+            <div class="editor-field"><label>Minimum curseur :</label><input type="number" value="${ev.min}" oninput="editorModel.events[${idx}].min = Number(this.value)"></div>
+            <div class="editor-field"><label>Maximum curseur :</label><input type="number" value="${ev.max}" oninput="editorModel.events[${idx}].max = Number(this.value)"></div>
+            <div class="editor-field"><label>Pas d'incrément (ex: 100) :</label><input type="number" value="${ev.step}" oninput="editorModel.events[${idx}].step = Number(this.value)"></div>
+            <div class="editor-field"><label>Unité (€, km, %) :</label><input type="text" value="${escapeHtml(ev.unit)}" oninput="editorModel.events[${idx}].unit = this.value"></div>
+            <div class="editor-field"><label style="color:var(--accent-green);">Valeur exacte cible :</label><input type="number" value="${ev.targetVal}" style="border-color:var(--accent-green);" oninput="editorModel.events[${idx}].targetVal = Number(this.value)"></div>
+            <div class="editor-field"><label style="color:var(--gold-trophy);">Marge de tolérance (±) :</label><input type="number" value="${ev.tolerance}" oninput="editorModel.events[${idx}].tolerance = Number(this.value)"></div>`;
+        }
+        else if (t === 'hotspot') {
+          const hs = ev.hotspot || { x: 50, y: 50, w: 22, h: 22 };
+          specificHtml += `
+            <div class="editor-field full" style="background:#161a24; padding:14px; border-radius:10px; border:1px solid var(--gold-trophy);">
+              <label style="color:var(--gold-trophy);">🎯 Définition de la zone cible sur la photo (Cliquez sur l'anomalie ci-dessous) :</label>
+              ${ev.qImg ? `
+                <div style="text-align:center; margin:10px 0;">
+                  <div class="hotspot-stage" onclick="setEditorHotspotCenter(event, ${idx})" style="cursor:crosshair;">
+                    <img src="${ev.qImg}" style="max-height:260px;">
+                    <div class="hotspot-target-rect" style="left:${hs.x - hs.w/2}%; top:${hs.y - hs.h/2}%; width:${hs.w}%; height:${hs.h}%;"></div>
+                  </div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                  <div><label>Largeur zone (${hs.w}%) :</label><input type="range" min="8" max="60" value="${hs.w}" oninput="editorModel.events[${idx}].hotspot.w = Number(this.value); renderEditorForm();"></div>
+                  <div><label>Hauteur zone (${hs.h}%) :</label><input type="range" min="8" max="60" value="${hs.h}" oninput="editorModel.events[${idx}].hotspot.h = Number(this.value); renderEditorForm();"></div>
+                </div>
+              ` : `<p style="color:#f87171; font-size:0.88rem;">⬆️ Importez d'abord une photo dans "Image de la Question" juste au-dessus pour placer la zone cliquable.</p>`}
+            </div>`;
+        }
+
+        return `
+        <div style="background:#141821; padding:18px; border-radius:12px; border:1px solid var(--border-metallic); margin-bottom:18px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; border-bottom:1px solid var(--border-metallic); padding-bottom:10px; flex-wrap:wrap; gap:10px;">
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+              <h4 style="color:var(--gold-trophy); font-size:1.1rem;">Question ${idx + 1}</h4>
+              <select style="width:auto; font-weight:bold; border-color:var(--accent-blue);" onchange="changeQuestionType(${idx}, this.value)">
+                <option value="qcm" ${t === 'qcm' ? 'selected' : ''}>🔘 QCM Classique (4 choix)</option>
+                <option value="multi" ${t === 'multi' ? 'selected' : ''}>☑️ QCM Multi-Réponses</option>
+                <option value="tf" ${t === 'tf' ? 'selected' : ''}>⚡ Vrai / Faux Express</option>
+                <option value="estimate" ${t === 'estimate' ? 'selected' : ''}>💰 Juste Prix VO (Curseur)</option>
+                <option value="hotspot" ${t === 'hotspot' ? 'selected' : ''}>🔍 Expertise Photo (Zone cliquable)</option>
+                <option value="poll" ${t === 'poll' ? 'selected' : ''}>📊 Sondage / Débat (0 pt)</option>
+              </select>
+            </div>
+            <button type="button" class="btn btn-dark" style="padding:5px 12px; color:#f87171;" onclick="removeQuestionFromEditor(${idx})">🗑️ Supprimer</button>
+          </div>
+
+          <div class="editor-grid">
+            <div class="editor-field full">
+              <label>Intitulé de la question :</label>
+              <textarea rows="2" oninput="editorModel.events[${idx}].q = this.value">${escapeHtml(ev.q)}</textarea>
+            </div>
+            <div class="editor-field full">
+              <label>Image de la Question ${t === 'hotspot' ? '(Obligatoire pour Expertise Photo)' : '(Optionnelle)'} :</label>
+              <div class="img-upload-box">
+                <input type="file" accept="image/*" style="border:none; background:transparent;" onchange="handleImgUpload(event, ${idx}, 'qImg')">
+                ${ev.qImg ? `<img src="${ev.qImg}" class="img-preview"><button type="button" class="btn-remove-img" onclick="removeImg(${idx}, 'qImg')">✕</button>` : ''}
+              </div>
+            </div>
+
+            ${specificHtml}
+
+            <div class="editor-field"><label>Indice Texte (Optionnel) :</label><input type="text" value="${escapeHtml(ev.clue)}" oninput="editorModel.events[${idx}].clue = this.value"></div>
+            <div class="editor-field">
+              <label>Image de l'Indice :</label>
+              <div class="img-upload-box" style="padding:6px;">
+                <input type="file" accept="image/*" style="font-size:0.8rem; border:none; background:transparent;" onchange="handleImgUpload(event, ${idx}, 'cImg')">
+                ${ev.cImg ? `<img src="${ev.cImg}" class="img-preview"><button type="button" class="btn-remove-img" onclick="removeImg(${idx}, 'cImg')">✕</button>` : ''}
+              </div>
+            </div>
+
+            <div class="editor-field full" style="border-top:1px dashed var(--border-metallic); padding-top:14px;">
+              <label>Explication Métier (affichée à la révélation + notes télécommande GM) :</label>
+              <textarea rows="2" oninput="editorModel.events[${idx}].anecdote = this.value">${escapeHtml(ev.anecdote)}</textarea>
+            </div>
+            <div class="editor-field full">
+              <label>Image de l'Explication :</label>
+              <div class="img-upload-box">
+                <input type="file" accept="image/*" style="border:none; background:transparent;" onchange="handleImgUpload(event, ${idx}, 'aImg')">
+                ${ev.aImg ? `<img src="${ev.aImg}" class="img-preview"><button type="button" class="btn-remove-img" onclick="removeImg(${idx}, 'aImg')">✕</button>` : ''}
+              </div>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function handleImgUpload(event, eIdx, field, optIdx = null) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX = (optIdx !== null) ? 320 : 720;
+          let w = img.width, h = img.height;
+          if (w > h && w > MAX) { h *= MAX / w; w = MAX; } else if (h > MAX) { w *= MAX / h; h = MAX; }
+          canvas.width = Math.round(w); canvas.height = Math.round(h);
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+          if (optIdx !== null) editorModel.events[eIdx].optImgs[optIdx] = dataUrl;
+          else editorModel.events[eIdx][field] = dataUrl;
+          renderEditorForm();
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function removeImg(eIdx, field, optIdx = null) {
+      if (optIdx !== null) editorModel.events[eIdx].optImgs[optIdx] = "";
+      else editorModel.events[eIdx][field] = "";
+      renderEditorForm();
+    }
+
+    function saveEditor() {
+      editorModel.label = document.getElementById('editor-title').value.trim() || "Quiz Sans Nom";
+      editorModel.events = (editorModel.events || []).map(normalizeQuestion);
+      if (!editorEditingId || !editorEditingId.startsWith('custom-')) editorEditingId = `custom-${Date.now()}`;
+
+      const cleanCopy = cleanFirebaseObj(editorModel);
+      customEditions[editorEditingId] = cleanCopy;
+      db.ref('editions/' + editorEditingId).set(cleanCopy);
+      try { localStorage.setItem('autoquiz_editions_v5', JSON.stringify(customEditions)); } catch(e){}
+
+      updateSelectMenus();
+      showToast("☁️ Quiz sauvegardé et synchronisé sur Firebase !");
+      switchGMTab('pres');
+      document.getElementById('gm-pres-selector').value = editorEditingId;
+    }
+
+    function copyIAPrompt() {
+      const prompt = `Tu es un expert en automobile B2B (reprise VO, inspection, enchères, mécanique, fiscalité). Génère un quiz interactif de 6 questions variées mêlant QCM ("qcm"), Vrai/Faux ("tf"), Multi-réponses ("multi") et estimation de cote ("estimate"). Réponds UNIQUEMENT avec un objet JSON valide suivant strictement cette structure :
+{
+  "label": "Titre du Quiz Auto B2B",
+  "events": [
+    {"type": "qcm", "q": "Question ?", "opts": ["Choix A", "Choix B", "Choix C", "Choix D"], "correct": 1, "clue": "Indice", "anecdote": "Explication métier."},
+    {"type": "tf", "q": "Affirmation Vrai ou Faux ?", "opts": ["Vrai", "Faux", "", ""], "correct": 0, "clue": "Indice", "anecdote": "Explication."},
+    {"type": "multi", "q": "Quelles sont les bonnes réponses ?", "opts": ["A", "B", "C", "D"], "correctMulti": [0, 2], "clue": "2 bonnes réponses", "anecdote": "Explication."},
+    {"type": "estimate", "q": "Estimez la cote B2B de ce véhicule...", "min": 5000, "max": 25000, "step": 250, "targetVal": 13500, "tolerance": 1500, "unit": "€", "clue": "Indice prix B2C", "anecdote": "Calcul de marge et FRE."}
+  ]
+}`;
+      safeCopyText(prompt, "📄 Consigne IA multi-formats copiée !");
+    }
+
+    function applyIAImport() {
+      try {
+        const txt = document.getElementById('import-ia-text').value.trim();
+        const match = txt.match(/\{[\s\S]*\}/);
+        const data = JSON.parse(match ? match[0] : txt);
+        if (!data.events || !Array.isArray(data.events) || data.events.length === 0) throw new Error();
+
+        const id = `custom-${Date.now()}`;
+        const normalized = {
+          label: data.label || "Quiz IA B2B",
+          events: data.events.map(normalizeQuestion)
+        };
+        customEditions[id] = cleanFirebaseObj(normalized);
+        db.ref('editions/' + id).set(customEditions[id]);
+        try { localStorage.setItem('autoquiz_editions_v5', JSON.stringify(customEditions)); } catch(e){}
+
+        updateSelectMenus();
+        document.getElementById('import-ia-text').value = "";
+        showToast("☁️ Quiz IA importé et synchronisé !");
+        loadEditionIntoEditor(id);
+      } catch (e) {
+        showToast("⚠️ JSON invalide. Vérifiez le bloc copié depuis l'IA.");
+      }
+    }
+  </script>
+</body>
+</html>
